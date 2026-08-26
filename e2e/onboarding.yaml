@@ -1,0 +1,6 @@
+# Flow Maestro d'exemple — à adapter une fois le premier écran réel implémenté.
+# Lancer avec: maestro test e2e/onboarding.yaml
+appId: com.mybudget.app
+---
+- launchApp
+- assertVisible: 'myBudget'

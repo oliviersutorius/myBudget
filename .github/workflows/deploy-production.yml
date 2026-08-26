@@ -1,0 +1,25 @@
+name: Deploy - Production
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build-and-submit-production:
+    name: Build & soumission aux stores (production)
+    runs-on: ubuntu-latest
+    # L'environnement "production" doit être configuré dans Settings > Environments
+    # avec une règle de protection "Required reviewers" (approbation humaine obligatoire).
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: eas build --profile production --platform all --non-interactive
+      - run: eas submit --profile production --platform all --non-interactive

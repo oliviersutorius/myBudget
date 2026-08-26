@@ -1,0 +1,23 @@
+name: Deploy - Staging/Preview
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build-and-submit-preview:
+    name: Build & distribution (preview)
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: eas build --profile preview --platform all --non-interactive
+      - run: eas submit --profile preview --platform all --non-interactive

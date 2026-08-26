@@ -1,0 +1,44 @@
+# Dépendances
+node_modules/
+
+# Secrets — ne jamais commiter (voir .claude/settings.json)
+.env
+.env.*
+!.env.example
+
+# Signing / certificats — ne jamais commiter
+android/keystore/
+ios/certs/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Expo / build
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.orig.*
+.metro-health-check*
+
+# Dossiers natifs générés par `expo prebuild` (workflow managé, non versionnés)
+/ios
+/android
+.kotlin/
+
+# Tests / couverture
+coverage/
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# TypeScript
+*.tsbuildinfo
+
+# Système
+.DS_Store
