@@ -25,6 +25,36 @@
 
 > Le scaffold initial (`npx create-expo-app`, config Drizzle, config Zustand, config Jest/Maestro) est la première étape technique à réaliser une fois ce harnais en place — ce `CLAUDE.md` et les scripts référencés ci-dessous anticipent cette structure.
 
+## Contexte domaine
+
+**Vision** : myBudget est une application mobile de gestion de budget mensuel, permettant à un particulier de se situer chaque mois sur ses frais fixes et sur sa capacité à dépenser ou investir son "argent de poche" (le **montant disponible**). Priorité produit : simplicité assumée, efficacité dès le lancement. Indicateur de succès : le respect du budget mensuel par l'utilisateur.
+
+**Entités principales** (détail à affiner au fil des tickets — voir `docs/DOMAIN.md`) :
+
+- **Compte (bancaire)** — un utilisateur peut avoir **plusieurs comptes**. Chaque compte porte son propre budget, géré de façon **totalement indépendante** (pas d'agrégation entre comptes, ni dans les calculs ni dans l'UI).
+- **Revenu** — entrée d'argent sur un compte donné, sur le mois.
+- **Dépense** — sortie d'argent sur un compte donné, catégorisée selon un type à deux dimensions (niveau 1 / niveau 2).
+- **Budget mensuel** — cycle aligné sur le mois calendaire, **par compte**.
+- **Montant disponible** — ce qu'il reste sur un compte une fois les dépenses couvertes par rapport aux revenus **de ce compte**.
+
+**Règles critiques connues à ce stade** :
+
+- Application **100% locale**, aucune intégration externe (pas de connexion bancaire, pas d'analytics, pas de sync cloud).
+- **Un seul persona (utilisateur humain)**, mais il peut gérer **plusieurs comptes bancaires** — pas de multi-profils/multi-utilisateurs, pas de budget partagé entre personnes.
+- **Les sommes ne sont jamais additionnées entre comptes** — chaque compte est géré et affiché distinctement dans l'UI.
+- Le budget mensuel suit le **mois calendaire** (pas de cycle personnalisé), pour chaque compte.
+
+**Glossaire condensé** (détail complet : `docs/GLOSSARY.md`) :
+
+- **Compte** — compte bancaire de l'utilisateur ; unité d'isolation des budgets (jamais agrégés entre eux).
+- **Montant disponible** — terme fonctionnel officiel à utiliser dans le code/UI (le terme familier "argent de poche" ne doit pas apparaître dans le code), calculé **par compte**.
+- **Dépense** — catégorisée niveau 1 / niveau 2 (hiérarchie à définir progressivement), rattachée à un compte.
+- **Budget mensuel** — mois calendaire, par compte.
+
+**Hors scope actuel** : synchronisation bancaire automatique, export/import de données, agrégation/consolidation entre comptes, multilingue, traçabilité/historique des modifications.
+
+Modèle de domaine détaillé, règles métier, workflows et epics : **à définir progressivement dans les tickets de développement** (voir `docs/DOMAIN.md` et `docs/EPICS.md`).
+
 ## Commandes de développement clés
 
 _Scripts npm attendus par les hooks et la CI (à créer lors du scaffold) :_
