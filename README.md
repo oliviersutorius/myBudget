@@ -1,6 +1,6 @@
-# Welcome to your Expo app 👋
+# myBudget
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Application mobile de gestion de budget personnel (Android/iOS), 100% locale — voir [`CLAUDE.md`](CLAUDE.md) et [`docs/DOMAIN.md`](docs/DOMAIN.md) pour le contexte produit.
 
 ## Get started
 
@@ -13,27 +13,12 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 2. Start the app
 
    ```bash
-   npx expo start
+   npm run start
    ```
 
-In the output, you'll find options to open the app in a
+Les écrans se trouvent dans **src/app** (file-based routing, [Expo Router](https://docs.expo.dev/router/introduction)).
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Prévisualiser l'app** : voir [`docs/technique/preview.md`](docs/technique/preview.md) — Expo Go suffit pour ce projet, aucun dev client nécessaire à ce stade.
 
 ### Other setup steps
 
