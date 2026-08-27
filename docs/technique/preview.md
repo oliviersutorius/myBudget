@@ -27,6 +27,16 @@ Si un futur module natif ajouté au projet n'est pas pris en charge par Expo Go,
    - **Android** : scanner intégré à l'app Expo Go.
    - **iOS** : appareil photo natif (ouvre automatiquement le lien vers Expo Go).
 
+## Erreur connue (bruit de log à ignorer) — corrigée
+
+`app.json` avait `web.output: "static"` (hérité du scaffold `create-expo-app`), qui déclenche un rendu serveur web **au démarrage même**, avant toute connexion d'un appareil. Ce rendu échoue systématiquement à cause d'un import `.wasm` non résolu par Metro (`expo-sqlite/web/worker.ts`, variante web du module SQLite, jamais utilisée par Expo Go sur mobile) :
+
+```
+Metro error: Unable to resolve module ./wa-sqlite/wa-sqlite.wasm ...
+```
+
+Sans impact sur la connexion Expo Go (bundle natif indépendant), mais bruyant et déroutant dans les logs à chaque lancement — `web.output` est passé à `"single"` pour supprimer ce rendu serveur inutile (le web n'est de toute façon pas une cible de myBudget, voir `CLAUDE.md`).
+
 ## Réseau (WSL2)
 
 Par défaut, Metro sert l'app en mode LAN (`http://<ip-locale>:8081`). Si le téléphone n'arrive pas à joindre le serveur — cas fréquent en développant depuis **WSL2**, dont la carte réseau virtuelle est isolée de l'hôte physique — relancer en mode tunnel :
