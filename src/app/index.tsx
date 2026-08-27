@@ -1,61 +1,50 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+import { useRouter } from 'expo-router';
+import { FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { getComptesQuery } from '@/db/queries/get-comptes';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+export default function AccueilScreen() {
+  const router = useRouter();
+  const { data: comptes } = useLiveQuery(getComptesQuery());
 
-export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
+        <ThemedText type="title" style={styles.title}>
+          Mes comptes
         </ThemedText>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <FlatList
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          data={comptes}
+          keyExtractor={(compte) => String(compte.id)}
+          renderItem={({ item: compte }) => (
+            <ThemedView type="backgroundElement" style={styles.compteRow}>
+              <ThemedView style={styles.compteInfo}>
+                <ThemedText type="smallBold">{compte.nom}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {compte.banque}
+                </ThemedText>
+              </ThemedView>
 
-        {Platform.OS === 'web' && <WebBadge />}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Modifier le compte ${compte.nom}`}
+                onPress={() =>
+                  router.push({ pathname: '/comptes/[id]/edit', params: { id: String(compte.id) } })
+                }
+              >
+                <ThemedText type="link">Modifier</ThemedText>
+              </Pressable>
+            </ThemedView>
+          )}
+        />
       </SafeAreaView>
     </ThemedView>
   );
@@ -64,35 +53,37 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    alignItems: 'center',
   },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+    width: '100%',
     maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
     paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
   title: {
-    textAlign: 'center',
+    paddingTop: Spacing.three,
   },
-  code: {
-    textTransform: 'uppercase',
+  list: {
+    flex: 1,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
+  listContent: {
+    gap: Spacing.two,
+    // La tab bar native (NativeTabs) survole le contenu au lieu de réserver
+    // de la place dans le layout : sans cet inset, les dernières lignes
+    // (et leur bouton "Modifier") se retrouvent cachées dessous.
+    paddingBottom: BottomTabInset + Spacing.four,
+  },
+  compteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  compteInfo: {
+    gap: Spacing.half,
   },
 });
