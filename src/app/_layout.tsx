@@ -1,6 +1,7 @@
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -16,6 +17,15 @@ SplashScreen.preventAutoHideAsync();
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { success: migrationsReady, error: migrationsError } = useMigrations(db, migrations);
+
+  useEffect(() => {
+    if (migrationsError) {
+      // AnimatedSplashOverlay (seul appelant de hideAsync() du projet) n'est
+      // jamais monté sur cette branche : sans cet appel explicite, le splash
+      // natif resterait affiché indéfiniment par-dessus le message d'erreur.
+      SplashScreen.hideAsync();
+    }
+  }, [migrationsError]);
 
   if (migrationsError) {
     return (
