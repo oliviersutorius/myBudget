@@ -1,0 +1,338 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "dd02cacc-904f-4480-9e09-358916816071",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "comptes": {
+      "name": "comptes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "banque": {
+          "name": "banque",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(current_timestamp)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "montants_depense_historique": {
+      "name": "montants_depense_historique",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "type_depense_niveau3_id": {
+          "name": "type_depense_niveau3_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mois_effet": {
+          "name": "mois_effet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "montant": {
+          "name": "montant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(current_timestamp)"
+        }
+      },
+      "indexes": {
+        "montants_depense_historique_type_id_idx": {
+          "name": "montants_depense_historique_type_id_idx",
+          "columns": [
+            "type_depense_niveau3_id"
+          ],
+          "isUnique": false
+        },
+        "montants_depense_historique_type_mois_idx": {
+          "name": "montants_depense_historique_type_mois_idx",
+          "columns": [
+            "type_depense_niveau3_id",
+            "mois_effet"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "montants_depense_historique_type_depense_niveau3_id_types_depense_niveau3_id_fk": {
+          "name": "montants_depense_historique_type_depense_niveau3_id_types_depense_niveau3_id_fk",
+          "tableFrom": "montants_depense_historique",
+          "tableTo": "types_depense_niveau3",
+          "columnsFrom": [
+            "type_depense_niveau3_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "revenus": {
+      "name": "revenus",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "compte_id": {
+          "name": "compte_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mois": {
+          "name": "mois",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "montant": {
+          "name": "montant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(current_timestamp)"
+        }
+      },
+      "indexes": {
+        "revenus_compte_id_mois_idx": {
+          "name": "revenus_compte_id_mois_idx",
+          "columns": [
+            "compte_id",
+            "mois"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "revenus_compte_id_comptes_id_fk": {
+          "name": "revenus_compte_id_comptes_id_fk",
+          "tableFrom": "revenus",
+          "tableTo": "comptes",
+          "columnsFrom": [
+            "compte_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "types_depense_niveau2": {
+      "name": "types_depense_niveau2",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "compte_id": {
+          "name": "compte_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "niveau1": {
+          "name": "niveau1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(current_timestamp)"
+        }
+      },
+      "indexes": {
+        "types_depense_niveau2_compte_id_idx": {
+          "name": "types_depense_niveau2_compte_id_idx",
+          "columns": [
+            "compte_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "types_depense_niveau2_compte_id_comptes_id_fk": {
+          "name": "types_depense_niveau2_compte_id_comptes_id_fk",
+          "tableFrom": "types_depense_niveau2",
+          "tableTo": "comptes",
+          "columnsFrom": [
+            "compte_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "types_depense_niveau3": {
+      "name": "types_depense_niveau3",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "niveau2_id": {
+          "name": "niveau2_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(current_timestamp)"
+        }
+      },
+      "indexes": {
+        "types_depense_niveau3_niveau2_id_idx": {
+          "name": "types_depense_niveau3_niveau2_id_idx",
+          "columns": [
+            "niveau2_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "types_depense_niveau3_niveau2_id_types_depense_niveau2_id_fk": {
+          "name": "types_depense_niveau3_niveau2_id_types_depense_niveau2_id_fk",
+          "tableFrom": "types_depense_niveau3",
+          "tableTo": "types_depense_niveau2",
+          "columnsFrom": [
+            "niveau2_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

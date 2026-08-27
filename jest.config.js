@@ -10,6 +10,7 @@ module.exports = {
     '!src/app/**', // routes Expo Router : couvertes en priorité par les tests e2e Maestro
     '!src/db/schema.ts', // déclaratif (définition de tables) — pas de logique à tester ici
     '!src/db/client.ts', // wiring de la connexion SQLite native — testé via l'e2e Maestro, pas en unitaire
+    '!src/db/queries/get-montant-depense-niveau3.ts', // wiring Drizzle mince — logique de résolution testée séparément (resolve-montant-depense.ts)
 
     // Boilerplate de démo livré par `create-expo-app` (tabs/icônes/thème d'exemple) —
     // à supprimer (ou à tester) au fur et à mesure qu'ils sont remplacés par du vrai code
