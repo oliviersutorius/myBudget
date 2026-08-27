@@ -18,6 +18,17 @@ Pas de table `mois` dédiée : le mois est une donnée dérivée (chaîne `'YYYY
 
 Toutes les clés étrangères sont indexées (`compte_id`, `niveau2_id`, `type_depense_niveau3_id`). `montants_depense_historique` a en plus un index unique `(type_depense_niveau3_id, mois_effet)` pour garantir au plus une entrée d'historique par mois d'effet. `revenus` a un index composite `(compte_id, mois)` pour la page de détail d'un mois.
 
+## Application des migrations
+
+Les migrations générées par `npm run db:generate` (`drizzle/`) sont appliquées au démarrage de l'app via `useMigrations` (`drizzle-orm/expo-sqlite/migrator`), branché dans `src/app/_layout.tsx` : le splash natif reste affiché tant que la migration n'est pas terminée, et un écran d'erreur minimal s'affiche en cas d'échec.
+
+Deux prérequis de build pour que `drizzle/migrations.js` (qui importe les fichiers `.sql` de migration comme des chaînes) fonctionne avec Metro :
+
+- `metro.config.js` : `resolver.sourceExts` étendu avec `sql`, pour que Metro considère ces fichiers comme des modules.
+- `babel.config.js` : plugin `babel-plugin-inline-import` (`extensions: ['.sql']`) pour inliner le contenu du fichier `.sql` comme chaîne de caractères à l'import.
+
+Vérifié via `npx expo export --platform android` (bundle Metro complet, migration incluse). **Non vérifié sur la cible web** : `expo-sqlite` y repose sur un worker + wasm (`wa-sqlite`) que Metro ne résout pas out-of-the-box — non bloquant, le web n'est pas une plateforme cible de myBudget (voir `CLAUDE.md`, uniquement Android/iOS).
+
 ## Contraintes d'intégrité
 
 `PRAGMA foreign_keys = ON` est activé dans `src/db/client.ts` (non actif par défaut sous SQLite). Combiné à l'absence de `ON DELETE CASCADE` sur les FK, toute tentative de suppression d'une ligne référencée échoue — c'est le mécanisme qui porte l'invariant "suppression bloquée si historique existant" (voir `DOMAIN.md` §4).
