@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { getComptesQuery } from '@/db/queries/get-comptes';
 
 export default function AccueilScreen() {
@@ -70,7 +70,10 @@ const styles = StyleSheet.create({
   },
   listContent: {
     gap: Spacing.two,
-    paddingBottom: Spacing.four,
+    // La tab bar native (NativeTabs) survole le contenu au lieu de réserver
+    // de la place dans le layout : sans cet inset, les dernières lignes
+    // (et leur bouton "Modifier") se retrouvent cachées dessous.
+    paddingBottom: BottomTabInset + Spacing.four,
   },
   compteRow: {
     flexDirection: 'row',
