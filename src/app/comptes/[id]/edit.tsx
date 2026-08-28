@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +29,7 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 
 type Niveau1 = 'fixe' | 'variable';
+type Onglet = 'infos' | 'depenses' | 'revenus' | 'budget';
 
 type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
 type TypeDepenseNiveau3 = Awaited<ReturnType<typeof getTypesDepenseNiveau3Query>>[number];
@@ -38,10 +39,31 @@ const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
   variable: 'Variable',
 };
 
+const ONGLETS: { cle: Onglet; libelle: string }[] = [
+  { cle: 'infos', libelle: 'Infos' },
+  { cle: 'depenses', libelle: 'Dépenses' },
+  { cle: 'revenus', libelle: 'Revenus' },
+  { cle: 'budget', libelle: 'Budget' },
+];
+
+const MOIS_LIBELLES = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
+
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const compteId = Number(id);
-  const router = useRouter();
   const theme = useTheme();
 
   const [chargement, setChargement] = useState(true);
@@ -51,6 +73,22 @@ export default function EditionCompteScreen() {
   const [errors, setErrors] = useState<CompteFormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  const [succesEnregistrement, setSuccesEnregistrement] = useState(false);
+  const [onglet, setOnglet] = useState<Onglet>('budget');
+  // Onglets Dépenses/Revenus/Budget déjà visités : une fois visité, un onglet
+  // reste monté (masqué avec `display: 'none'` plutôt que démonté) pour ne
+  // pas perdre son état (lignes dépliées, année/mois sélectionné, live
+  // queries) à chaque va-et-vient entre onglets.
+  const [ongletsVisites, setOngletsVisites] = useState<ReadonlySet<Onglet>>(
+    () => new Set(['budget']),
+  );
+
+  const changerOnglet = (nouvelOnglet: Onglet) => {
+    setOnglet(nouvelOnglet);
+    setOngletsVisites((precedent) =>
+      precedent.has(nouvelOnglet) ? precedent : new Set(precedent).add(nouvelOnglet),
+    );
+  };
 
   useEffect(() => {
     let annule = false;
@@ -90,12 +128,14 @@ export default function EditionCompteScreen() {
     }
 
     setErreurEnregistrement(null);
+    setSuccesEnregistrement(false);
     setEnregistrement(true);
     try {
       await updateCompte(compteId, nom.trim(), banque.trim());
-      router.back();
+      setSuccesEnregistrement(true);
     } catch {
       setErreurEnregistrement('La sauvegarde a échoué, réessayez.');
+    } finally {
       setEnregistrement(false);
     }
   };
@@ -126,70 +166,136 @@ export default function EditionCompteScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">Édition du compte</ThemedText>
+          <ThemedText type="title">{nom}</ThemedText>
 
-          <ThemedView style={styles.field}>
-            <ThemedText type="smallBold">Nom</ThemedText>
-            <TextInput
-              value={nom}
-              onChangeText={setNom}
-              placeholder="Ex. Compte courant"
-              placeholderTextColor={theme.textSecondary}
-              accessibilityLabel="Nom du compte"
-              style={[
-                styles.input,
-                { color: theme.text, backgroundColor: theme.backgroundElement },
-              ]}
-            />
-            {errors.nom ? (
-              <ThemedText type="small" style={styles.errorText}>
-                {errors.nom}
-              </ThemedText>
-            ) : null}
-          </ThemedView>
+          <BarreOnglets actif={onglet} onChanger={changerOnglet} />
 
-          <ThemedView style={styles.field}>
-            <ThemedText type="smallBold">Banque</ThemedText>
-            <TextInput
-              value={banque}
-              onChangeText={setBanque}
-              placeholder="Ex. BNP Paribas"
-              placeholderTextColor={theme.textSecondary}
-              accessibilityLabel="Banque"
-              style={[
-                styles.input,
-                { color: theme.text, backgroundColor: theme.backgroundElement },
-              ]}
-            />
-            {errors.banque ? (
-              <ThemedText type="small" style={styles.errorText}>
-                {errors.banque}
-              </ThemedText>
-            ) : null}
-          </ThemedView>
+          {onglet === 'infos' ? (
+            <ThemedView style={styles.section}>
+              <ThemedView style={styles.field}>
+                <ThemedText type="smallBold">Nom</ThemedText>
+                <TextInput
+                  value={nom}
+                  onChangeText={(valeur) => {
+                    setNom(valeur);
+                    setSuccesEnregistrement(false);
+                  }}
+                  placeholder="Ex. Compte courant"
+                  placeholderTextColor={theme.textSecondary}
+                  accessibilityLabel="Nom du compte"
+                  style={[
+                    styles.input,
+                    { color: theme.text, backgroundColor: theme.backgroundElement },
+                  ]}
+                />
+                {errors.nom ? (
+                  <ThemedText type="small" style={styles.errorText}>
+                    {errors.nom}
+                  </ThemedText>
+                ) : null}
+              </ThemedView>
 
-          {erreurEnregistrement ? (
-            <ThemedText type="small" style={styles.errorText}>
-              {erreurEnregistrement}
-            </ThemedText>
+              <ThemedView style={styles.field}>
+                <ThemedText type="smallBold">Banque</ThemedText>
+                <TextInput
+                  value={banque}
+                  onChangeText={(valeur) => {
+                    setBanque(valeur);
+                    setSuccesEnregistrement(false);
+                  }}
+                  placeholder="Ex. BNP Paribas"
+                  placeholderTextColor={theme.textSecondary}
+                  accessibilityLabel="Banque"
+                  style={[
+                    styles.input,
+                    { color: theme.text, backgroundColor: theme.backgroundElement },
+                  ]}
+                />
+                {errors.banque ? (
+                  <ThemedText type="small" style={styles.errorText}>
+                    {errors.banque}
+                  </ThemedText>
+                ) : null}
+              </ThemedView>
+
+              {erreurEnregistrement ? (
+                <ThemedText type="small" style={styles.errorText}>
+                  {erreurEnregistrement}
+                </ThemedText>
+              ) : null}
+
+              {succesEnregistrement ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  ✓ Modifications enregistrées.
+                </ThemedText>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Enregistrer les modifications du compte"
+                disabled={enregistrement}
+                onPress={handleValider}
+              >
+                <ThemedView type="backgroundElement" style={styles.submitButton}>
+                  <ThemedText type="smallBold">
+                    {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            </ThemedView>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Enregistrer les modifications du compte"
-            disabled={enregistrement}
-            onPress={handleValider}
-          >
-            <ThemedView type="backgroundElement" style={styles.submitButton}>
-              <ThemedText type="smallBold">
-                {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-              </ThemedText>
+          {ongletsVisites.has('depenses') ? (
+            <ThemedView style={onglet === 'depenses' ? undefined : styles.masqueDisplayNone}>
+              <DepensesTab compteId={compteId} />
             </ThemedView>
-          </Pressable>
-
-          <TypesDepenseNiveau2Section compteId={compteId} />
+          ) : null}
+          {ongletsVisites.has('revenus') ? (
+            <ThemedView style={onglet === 'revenus' ? undefined : styles.masqueDisplayNone}>
+              <RevenusTab />
+            </ThemedView>
+          ) : null}
+          {ongletsVisites.has('budget') ? (
+            <ThemedView style={onglet === 'budget' ? undefined : styles.masqueDisplayNone}>
+              <BudgetTab />
+            </ThemedView>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+// Onglets internes à la page compte, implémentés en JS : NativeTabs ne
+// supporte pas l'imbrication de tabs natifs (voir docs/technique/navigation.md).
+function BarreOnglets({
+  actif,
+  onChanger,
+}: {
+  actif: Onglet;
+  onChanger: (onglet: Onglet) => void;
+}) {
+  return (
+    <ThemedView style={styles.tabBar}>
+      {ONGLETS.map((item) => (
+        <Pressable
+          key={item.cle}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: actif === item.cle }}
+          accessibilityLabel={`Onglet ${item.libelle}`}
+          onPress={() => onChanger(item.cle)}
+          style={styles.tabWrapper}
+        >
+          <ThemedView
+            type={actif === item.cle ? 'backgroundSelected' : 'backgroundElement'}
+            style={styles.tab}
+          >
+            <ThemedText type={actif === item.cle ? 'smallBold' : 'small'}>
+              {item.libelle}
+            </ThemedText>
+          </ThemedView>
+        </Pressable>
+      ))}
     </ThemedView>
   );
 }
@@ -289,10 +395,53 @@ function LigneActionsEdition({
   );
 }
 
-function TypesDepenseNiveau2Section({ compteId }: { compteId: number }) {
-  const theme = useTheme();
+function DepensesTab({ compteId }: { compteId: number }) {
   const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
+  const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
+  const typesVariable = types.filter((type) => type.niveau1 === 'variable');
 
+  return (
+    <ThemedView style={styles.section}>
+      <Niveau1Table titre="Fixe" types={typesFixe} />
+      <Niveau1Table titre="Variable" types={typesVariable} />
+      <AjoutTypeNiveau2Form compteId={compteId} />
+      <AjoutTypeNiveau3Form typesNiveau2={types} />
+    </ThemedView>
+  );
+}
+
+function Niveau1Table({ titre, types }: { titre: string; types: TypeDepenseNiveau2[] }) {
+  return (
+    <ThemedView style={styles.niveau1Table}>
+      <ThemedText type="smallBold">{titre}</ThemedText>
+
+      {types.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Aucun type « {titre} » pour l’instant.
+        </ThemedText>
+      ) : (
+        <ThemedView style={styles.typesList}>
+          {types.map((type) => (
+            <Niveau2RowCollapsible key={type.id} item={type} />
+          ))}
+        </ThemedView>
+      )}
+
+      <ThemedView style={styles.totalRow}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Total {titre}
+        </ThemedText>
+        {/* La somme des montants dépend de la saisie du montant niveau 3 (ticket #9). */}
+        <ThemedText type="small" themeColor="textSecondary">
+          — (ticket #9)
+        </ThemedText>
+      </ThemedView>
+    </ThemedView>
+  );
+}
+
+function AjoutTypeNiveau2Form({ compteId }: { compteId: number }) {
+  const theme = useTheme();
   const [libelle, setLibelle] = useState('');
   const [niveau1, setNiveau1] = useState<Niveau1 | null>(null);
   const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
@@ -321,70 +470,169 @@ function TypesDepenseNiveau2Section({ compteId }: { compteId: number }) {
   };
 
   return (
-    <ThemedView style={styles.section}>
-      <ThemedText type="smallBold">Types de dépenses</ThemedText>
+    <ThemedView style={styles.ajoutForm}>
+      <ThemedText type="smallBold">Ajouter un type de dépense</ThemedText>
 
-      {types.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Aucun type de dépense pour l’instant.
+      <TextInput
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Maison"
+        placeholderTextColor={theme.textSecondary}
+        accessibilityLabel="Libellé du nouveau type de dépense"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.libelle ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.libelle}
         </ThemedText>
-      ) : (
-        <ThemedView style={styles.typesList}>
-          {types.map((type) => (
-            <TypeDepenseNiveau2Row key={type.id} item={type} />
-          ))}
+      ) : null}
+
+      <Niveau1Selector
+        valeur={niveau1}
+        onChanger={setNiveau1}
+        accessibilityLabelPrefix="Nouveau type de dépense"
+      />
+      {errors.niveau1 ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.niveau1}
+        </ThemedText>
+      ) : null}
+
+      {erreurEnregistrement ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreurEnregistrement}
+        </ThemedText>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajouter un type de dépense"
+        disabled={enregistrement}
+        onPress={handleAjouter}
+      >
+        <ThemedView type="backgroundElement" style={styles.submitButton}>
+          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
         </ThemedView>
-      )}
-
-      <ThemedView style={styles.ajoutForm}>
-        <TextInput
-          value={libelle}
-          onChangeText={setLibelle}
-          placeholder="Ex. Maison"
-          placeholderTextColor={theme.textSecondary}
-          accessibilityLabel="Libellé du nouveau type de dépense"
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-        />
-        {errors.libelle ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {errors.libelle}
-          </ThemedText>
-        ) : null}
-
-        <Niveau1Selector
-          valeur={niveau1}
-          onChanger={setNiveau1}
-          accessibilityLabelPrefix="Nouveau type de dépense"
-        />
-        {errors.niveau1 ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {errors.niveau1}
-          </ThemedText>
-        ) : null}
-
-        {erreurEnregistrement ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {erreurEnregistrement}
-          </ThemedText>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ajouter un type de dépense"
-          disabled={enregistrement}
-          onPress={handleAjouter}
-        >
-          <ThemedView type="backgroundElement" style={styles.submitButton}>
-            <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
-          </ThemedView>
-        </Pressable>
-      </ThemedView>
+      </Pressable>
     </ThemedView>
   );
 }
 
-function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
+function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNiveau2[] }) {
   const theme = useTheme();
+  const [libelle, setLibelle] = useState('');
+  const [niveau2Id, setNiveau2Id] = useState<number | null>(null);
+  const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+
+  // Si le parent sélectionné a été supprimé entre-temps, on ne le considère plus comme
+  // sélectionné : évite de soumettre un niveau2Id devenu inexistant en base.
+  const selectedNiveau2Id = typesNiveau2.some((type2) => type2.id === niveau2Id) ? niveau2Id : null;
+
+  const handleAjouter = async () => {
+    const erreursValidation = validateTypeDepenseNiveau3Form({
+      libelle,
+      niveau2Id: selectedNiveau2Id,
+    });
+    setErrors(erreursValidation);
+
+    if (Object.keys(erreursValidation).length > 0 || selectedNiveau2Id === null) {
+      return;
+    }
+
+    setErreurEnregistrement(null);
+    setEnregistrement(true);
+    try {
+      await createTypeDepenseNiveau3(selectedNiveau2Id, libelle.trim());
+      setLibelle('');
+      setNiveau2Id(null);
+    } catch {
+      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  if (typesNiveau2.length === 0) {
+    return (
+      <ThemedView style={styles.ajoutForm}>
+        <ThemedText type="smallBold">Ajouter une ligne</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Créez d’abord un type de dépense ci-dessus.
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.ajoutForm}>
+      <ThemedText type="smallBold">Ajouter une ligne</ThemedText>
+
+      <ThemedView style={styles.niveau2SelectorRow}>
+        {typesNiveau2.map((type2) => (
+          <Pressable
+            key={type2.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Type de dépense parent : ${type2.libelle} (${LIBELLE_NIVEAU1[type2.niveau1]})`}
+            onPress={() => setNiveau2Id(type2.id)}
+          >
+            <ThemedView
+              type={selectedNiveau2Id === type2.id ? 'backgroundSelected' : 'backgroundElement'}
+              style={styles.niveau2Chip}
+            >
+              <ThemedText type="small">{type2.libelle}</ThemedText>
+            </ThemedView>
+          </Pressable>
+        ))}
+      </ThemedView>
+      {errors.niveau2Id ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.niveau2Id}
+        </ThemedText>
+      ) : null}
+
+      <TextInput
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Crédit immobilier"
+        placeholderTextColor={theme.textSecondary}
+        accessibilityLabel="Libellé de la nouvelle ligne"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.libelle ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.libelle}
+        </ThemedText>
+      ) : null}
+
+      {erreurEnregistrement ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreurEnregistrement}
+        </ThemedText>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajouter une ligne"
+        disabled={enregistrement}
+        onPress={handleAjouter}
+      >
+        <ThemedView type="backgroundElement" style={styles.submitButton}>
+          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
+        </ThemedView>
+      </Pressable>
+    </ThemedView>
+  );
+}
+
+function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
+  const theme = useTheme();
+  const [ouvert, setOuvert] = useState(false);
+  // Une fois dépliée au moins une fois, la liste niveau 3 reste montée (juste
+  // masquée avec `display: 'none'` au repli) pour ne pas perdre un ajout ou
+  // une édition niveau 3 en cours si l'utilisateur replie la ligne parente.
+  const [aEteOuvert, setAEteOuvert] = useState(false);
   const [edition, setEdition] = useState(false);
   const [libelle, setLibelle] = useState(item.libelle);
   const [niveau1, setNiveau1] = useState<Niveau1 | null>(item.niveau1);
@@ -497,12 +745,22 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
         </ThemedView>
       ) : (
         <ThemedView type="backgroundElement" style={styles.typeRow}>
-          <ThemedView style={styles.typeRowInfo}>
-            <ThemedText type="smallBold">{item.libelle}</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
+            onPress={() => {
+              setOuvert((valeur) => !valeur);
+              setAEteOuvert(true);
+            }}
+            style={styles.typeRowHeader}
+          >
+            <ThemedText type="smallBold">
+              {ouvert ? '▾' : '▸'} {item.libelle}
+            </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {LIBELLE_NIVEAU1[item.niveau1]}
             </ThemedText>
-          </ThemedView>
+          </Pressable>
 
           {erreur ? (
             <ThemedText type="small" style={styles.errorText}>
@@ -520,106 +778,53 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
         </ThemedView>
       )}
 
-      {/* Toujours monté (même en édition du niveau 2) pour ne pas perdre un
-          ajout/une édition de ligne niveau 3 en cours si l'utilisateur
-          bascule la ligne niveau 2 en édition entre-temps. */}
-      <TypesDepenseNiveau3Section
-        niveau2Id={item.id}
-        niveau2Libelle={item.libelle}
-        niveau1Parent={item.niveau1}
-      />
+      {aEteOuvert ? (
+        <Niveau3Liste niveau2Id={item.id} niveau1Parent={item.niveau1} masque={!ouvert} />
+      ) : null}
     </>
   );
 }
 
-function TypesDepenseNiveau3Section({
+function Niveau3Liste({
   niveau2Id,
-  niveau2Libelle,
   niveau1Parent,
+  masque,
 }: {
   niveau2Id: number;
-  niveau2Libelle: string;
   niveau1Parent: Niveau1;
+  masque: boolean;
 }) {
-  const theme = useTheme();
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
-  const niveau2Accessible = `${niveau2Libelle} (#${niveau2Id})`;
-
-  const [libelle, setLibelle] = useState('');
-  const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
-  const [enregistrement, setEnregistrement] = useState(false);
-  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
-
-  const handleAjouter = async () => {
-    const erreursValidation = validateTypeDepenseNiveau3Form({ libelle });
-    setErrors(erreursValidation);
-
-    if (Object.keys(erreursValidation).length > 0) {
-      return;
-    }
-
-    setErreurEnregistrement(null);
-    setEnregistrement(true);
-    try {
-      await createTypeDepenseNiveau3(niveau2Id, libelle.trim());
-      setLibelle('');
-    } catch {
-      setErreurEnregistrement('L’ajout a échoué, réessayez.');
-    } finally {
-      setEnregistrement(false);
-    }
-  };
 
   return (
-    <ThemedView style={styles.niveau3Section}>
+    <ThemedView style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}>
       {sousTypes.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
           Aucune ligne pour l’instant.
         </ThemedText>
       ) : (
-        <ThemedView style={styles.typesList}>
-          {sousTypes.map((sousType) => (
-            <TypeDepenseNiveau3Row
-              key={sousType.id}
-              item={sousType}
-              niveau1Parent={niveau1Parent}
-            />
-          ))}
-        </ThemedView>
-      )}
-
-      <ThemedView style={styles.ajoutForm}>
-        <TextInput
-          value={libelle}
-          onChangeText={setLibelle}
-          placeholder="Ex. Crédit immobilier"
-          placeholderTextColor={theme.textSecondary}
-          accessibilityLabel={`Libellé de la nouvelle ligne du type de dépense ${niveau2Accessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.libelle ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {errors.libelle}
-          </ThemedText>
-        ) : null}
-
-        {erreurEnregistrement ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {erreurEnregistrement}
-          </ThemedText>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Ajouter une ligne au type de dépense ${niveau2Accessible}`}
-          disabled={enregistrement}
-          onPress={handleAjouter}
-        >
-          <ThemedView type="backgroundSelected" style={styles.submitButtonSmall}>
-            <ThemedText type="small">{enregistrement ? 'Ajout…' : 'Ajouter une ligne'}</ThemedText>
+        <>
+          <ThemedView style={styles.typesList}>
+            {sousTypes.map((sousType) => (
+              <TypeDepenseNiveau3Row
+                key={sousType.id}
+                item={sousType}
+                niveau1Parent={niveau1Parent}
+              />
+            ))}
           </ThemedView>
-        </Pressable>
-      </ThemedView>
+
+          <ThemedView style={styles.totalRow}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Total
+            </ThemedText>
+            {/* La somme dépend de la saisie du montant niveau 3 (ticket #9). */}
+            <ThemedText type="small" themeColor="textSecondary">
+              — (ticket #9)
+            </ThemedText>
+          </ThemedView>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -648,7 +853,10 @@ function TypeDepenseNiveau3Row({
   };
 
   const handleEnregistrer = async () => {
-    const erreursValidation = validateTypeDepenseNiveau3Form({ libelle });
+    const erreursValidation = validateTypeDepenseNiveau3Form({
+      libelle,
+      niveau2Id: item.niveau2Id,
+    });
     setErrors(erreursValidation);
 
     if (Object.keys(erreursValidation).length > 0) {
@@ -730,10 +938,16 @@ function TypeDepenseNiveau3Row({
 
   return (
     <ThemedView type="backgroundElement" style={styles.niveau3Row}>
-      <ThemedView style={styles.typeRowInfo}>
-        <ThemedText type="small">{item.libelle}</ThemedText>
+      <ThemedView style={styles.niveau3RowHeader}>
+        <ThemedView style={styles.typeRowInfo}>
+          <ThemedText type="small">{item.libelle}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {LIBELLE_NIVEAU1[niveau1Parent]} (hérité)
+          </ThemedText>
+        </ThemedView>
+        {/* Le montant dépend de la saisie/historisation niveau 3 (ticket #9). */}
         <ThemedText type="small" themeColor="textSecondary">
-          {LIBELLE_NIVEAU1[niveau1Parent]} (hérité)
+          — (ticket #9)
         </ThemedText>
       </ThemedView>
 
@@ -754,9 +968,121 @@ function TypeDepenseNiveau3Row({
   );
 }
 
+// Onglet placeholder : la lecture/l'écriture des revenus est le scope du
+// ticket #12 ("Ajout d'un revenu sur un mois donné"). Cet onglet pose
+// seulement le point d'entrée (voir ticket #34).
+function RevenusTab() {
+  const [formulaireDemande, setFormulaireDemande] = useState(false);
+
+  return (
+    <ThemedView style={styles.section}>
+      <ThemedText type="smallBold">Revenus</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Aucun revenu pour l’instant.
+      </ThemedText>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajouter un revenu"
+        onPress={() => setFormulaireDemande(true)}
+      >
+        <ThemedView type="backgroundElement" style={styles.submitButton}>
+          <ThemedText type="smallBold">+ Ajouter un revenu</ThemedText>
+        </ThemedView>
+      </Pressable>
+
+      {formulaireDemande ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Formulaire d’ajout à venir (ticket #12).
+        </ThemedText>
+      ) : null}
+    </ThemedView>
+  );
+}
+
+// Onglet placeholder pour la structure de navigation (sélecteur d'année,
+// liste des mois, détail d'un mois avec retour). Le contenu réel du détail
+// (répartition des dépenses, revenus, montant disponible) dépend des
+// tickets #9, #12 et #13 — voir ticket #34.
+function BudgetTab() {
+  const [annee, setAnnee] = useState(() => new Date().getFullYear());
+  const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
+
+  if (moisSelectionne !== null) {
+    return (
+      <ThemedView style={styles.section}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retour à la liste des mois"
+          onPress={() => setMoisSelectionne(null)}
+        >
+          <ThemedText type="link">‹ Retour aux mois</ThemedText>
+        </Pressable>
+
+        <ThemedText type="smallBold">
+          {MOIS_LIBELLES[moisSelectionne - 1]} {annee}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Détail du mois à venir (dépend des tickets #9, #12, #13).
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.section}>
+      <ThemedView style={styles.anneeSelectorRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Année précédente"
+          onPress={() => setAnnee((valeur) => valeur - 1)}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ‹
+          </ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold">{annee}</ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Année suivante"
+          onPress={() => setAnnee((valeur) => valeur + 1)}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ›
+          </ThemedText>
+        </Pressable>
+      </ThemedView>
+
+      <ThemedView style={styles.typesList}>
+        {MOIS_LIBELLES.map((libelleMois, index) => {
+          const mois = 12 - index;
+          return (
+            <Pressable
+              key={mois}
+              accessibilityRole="button"
+              accessibilityLabel={`Voir le détail de ${MOIS_LIBELLES[mois - 1]} ${annee}`}
+              onPress={() => setMoisSelectionne(mois)}
+            >
+              <ThemedView type="backgroundElement" style={styles.moisRow}>
+                <ThemedText type="small">{MOIS_LIBELLES[mois - 1]}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  — (à venir)
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          );
+        })}
+      </ThemedView>
+    </ThemedView>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  masqueDisplayNone: {
+    display: 'none',
   },
   safeArea: {
     flex: 1,
@@ -782,14 +1108,24 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.three,
   },
-  submitButtonSmall: {
+  section: {
+    gap: Spacing.two,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    backgroundColor: 'transparent',
+  },
+  tabWrapper: {
+    flex: 1,
+  },
+  tab: {
     alignItems: 'center',
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
   },
-  section: {
+  niveau1Table: {
     gap: Spacing.two,
-    paddingTop: Spacing.three,
   },
   typesList: {
     gap: Spacing.two,
@@ -799,12 +1135,20 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     padding: Spacing.three,
   },
+  typeRowHeader: {
+    gap: Spacing.half,
+  },
   typeRowInfo: {
     gap: Spacing.half,
   },
   typeRowActions: {
     flexDirection: 'row',
     gap: Spacing.three,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
   },
   ajoutForm: {
     gap: Spacing.one,
@@ -821,6 +1165,16 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
   },
+  niveau2SelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  niveau2Chip: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
   niveau3Section: {
     gap: Spacing.two,
     paddingLeft: Spacing.three,
@@ -830,5 +1184,26 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     borderRadius: Spacing.two,
     padding: Spacing.two,
+  },
+  niveau3RowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  anneeSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.four,
+  },
+  anneeChevron: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  moisRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
 });
