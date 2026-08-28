@@ -15,6 +15,10 @@ module.exports = {
     '!src/db/queries/create-compte.ts', // idem : insertion mince, validation testée séparément (validate-compte-form.ts)
     '!src/db/queries/get-compte.ts', // idem : requête déclarative pure
     '!src/db/queries/update-compte.ts', // idem : mise à jour mince, validation testée séparément (validate-compte-form.ts)
+    '!src/db/queries/get-types-depense-niveau2.ts', // idem : requête déclarative pure
+    '!src/db/queries/create-type-depense-niveau2.ts', // idem : insertion mince, validation testée séparément (validate-type-depense-niveau2-form.ts)
+    '!src/db/queries/update-type-depense-niveau2.ts', // idem : mise à jour mince, validation testée séparément (validate-type-depense-niveau2-form.ts)
+    '!src/db/queries/delete-type-depense-niveau2.ts', // idem : suppression mince
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro
     '!src/components/animated-icon.web.tsx',
 

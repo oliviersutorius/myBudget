@@ -1,15 +1,33 @@
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
+import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
+import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
+import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { updateCompte } from '@/db/queries/update-compte';
+import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
+import {
+  validateTypeDepenseNiveau2Form,
+  type TypeDepenseNiveau2FormErrors,
+} from '@/forms/validate-type-depense-niveau2-form';
 import { useTheme } from '@/hooks/use-theme';
+
+type Niveau1 = 'fixe' | 'variable';
+
+type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
+
+const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
+  fixe: 'Fixe',
+  variable: 'Variable',
+};
 
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -98,41 +116,178 @@ export default function EditionCompteScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title">Édition du compte</ThemedText>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ThemedText type="title">Édition du compte</ThemedText>
 
-        <ThemedView style={styles.field}>
-          <ThemedText type="smallBold">Nom</ThemedText>
-          <TextInput
-            value={nom}
-            onChangeText={setNom}
-            placeholder="Ex. Compte courant"
-            placeholderTextColor={theme.textSecondary}
-            accessibilityLabel="Nom du compte"
-            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-          />
-          {errors.nom ? (
+          <ThemedView style={styles.field}>
+            <ThemedText type="smallBold">Nom</ThemedText>
+            <TextInput
+              value={nom}
+              onChangeText={setNom}
+              placeholder="Ex. Compte courant"
+              placeholderTextColor={theme.textSecondary}
+              accessibilityLabel="Nom du compte"
+              style={[
+                styles.input,
+                { color: theme.text, backgroundColor: theme.backgroundElement },
+              ]}
+            />
+            {errors.nom ? (
+              <ThemedText type="small" style={styles.errorText}>
+                {errors.nom}
+              </ThemedText>
+            ) : null}
+          </ThemedView>
+
+          <ThemedView style={styles.field}>
+            <ThemedText type="smallBold">Banque</ThemedText>
+            <TextInput
+              value={banque}
+              onChangeText={setBanque}
+              placeholder="Ex. BNP Paribas"
+              placeholderTextColor={theme.textSecondary}
+              accessibilityLabel="Banque"
+              style={[
+                styles.input,
+                { color: theme.text, backgroundColor: theme.backgroundElement },
+              ]}
+            />
+            {errors.banque ? (
+              <ThemedText type="small" style={styles.errorText}>
+                {errors.banque}
+              </ThemedText>
+            ) : null}
+          </ThemedView>
+
+          {erreurEnregistrement ? (
             <ThemedText type="small" style={styles.errorText}>
-              {errors.nom}
+              {erreurEnregistrement}
             </ThemedText>
           ) : null}
-        </ThemedView>
 
-        <ThemedView style={styles.field}>
-          <ThemedText type="smallBold">Banque</ThemedText>
-          <TextInput
-            value={banque}
-            onChangeText={setBanque}
-            placeholder="Ex. BNP Paribas"
-            placeholderTextColor={theme.textSecondary}
-            accessibilityLabel="Banque"
-            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-          />
-          {errors.banque ? (
-            <ThemedText type="small" style={styles.errorText}>
-              {errors.banque}
-            </ThemedText>
-          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Enregistrer les modifications du compte"
+            disabled={enregistrement}
+            onPress={handleValider}
+          >
+            <ThemedView type="backgroundElement" style={styles.submitButton}>
+              <ThemedText type="smallBold">
+                {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+              </ThemedText>
+            </ThemedView>
+          </Pressable>
+
+          <TypesDepenseNiveau2Section compteId={compteId} />
+        </ScrollView>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+function Niveau1Selector({
+  valeur,
+  onChanger,
+  accessibilityLabelPrefix,
+}: {
+  valeur: Niveau1 | null;
+  onChanger: (niveau1: Niveau1) => void;
+  accessibilityLabelPrefix: string;
+}) {
+  return (
+    <ThemedView style={styles.niveau1Row}>
+      {(['fixe', 'variable'] as const).map((option) => (
+        <Pressable
+          key={option}
+          accessibilityRole="button"
+          accessibilityLabel={`${accessibilityLabelPrefix} — ${LIBELLE_NIVEAU1[option]}`}
+          onPress={() => onChanger(option)}
+          style={styles.niveau1ChipWrapper}
+        >
+          <ThemedView
+            type={valeur === option ? 'backgroundSelected' : 'backgroundElement'}
+            style={styles.niveau1Chip}
+          >
+            <ThemedText type="small">{LIBELLE_NIVEAU1[option]}</ThemedText>
+          </ThemedView>
+        </Pressable>
+      ))}
+    </ThemedView>
+  );
+}
+
+function TypesDepenseNiveau2Section({ compteId }: { compteId: number }) {
+  const theme = useTheme();
+  const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
+
+  const [libelle, setLibelle] = useState('');
+  const [niveau1, setNiveau1] = useState<Niveau1 | null>(null);
+  const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+
+  const handleAjouter = async () => {
+    const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1 });
+    setErrors(erreursValidation);
+
+    if (Object.keys(erreursValidation).length > 0 || niveau1 === null) {
+      return;
+    }
+
+    setErreurEnregistrement(null);
+    setEnregistrement(true);
+    try {
+      await createTypeDepenseNiveau2(compteId, libelle.trim(), niveau1);
+      setLibelle('');
+      setNiveau1(null);
+    } catch {
+      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  return (
+    <ThemedView style={styles.section}>
+      <ThemedText type="smallBold">Types de dépenses</ThemedText>
+
+      {types.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Aucun type de dépense pour l’instant.
+        </ThemedText>
+      ) : (
+        <ThemedView style={styles.typesList}>
+          {types.map((type) => (
+            <TypeDepenseNiveau2Row key={type.id} item={type} />
+          ))}
         </ThemedView>
+      )}
+
+      <ThemedView style={styles.ajoutForm}>
+        <TextInput
+          value={libelle}
+          onChangeText={setLibelle}
+          placeholder="Ex. Maison"
+          placeholderTextColor={theme.textSecondary}
+          accessibilityLabel="Libellé du nouveau type de dépense"
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+        {errors.libelle ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {errors.libelle}
+          </ThemedText>
+        ) : null}
+
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix="Nouveau type de dépense"
+        />
+        {errors.niveau1 ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {errors.niveau1}
+          </ThemedText>
+        ) : null}
 
         {erreurEnregistrement ? (
           <ThemedText type="small" style={styles.errorText}>
@@ -142,24 +297,177 @@ export default function EditionCompteScreen() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Enregistrer les modifications du compte"
+          accessibilityLabel="Ajouter un type de dépense"
           disabled={enregistrement}
-          onPress={handleValider}
+          onPress={handleAjouter}
         >
           <ThemedView type="backgroundElement" style={styles.submitButton}>
-            <ThemedText type="smallBold">
-              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-            </ThemedText>
+            <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
           </ThemedView>
         </Pressable>
+      </ThemedView>
+    </ThemedView>
+  );
+}
 
-        <ThemedView style={styles.section}>
-          <ThemedText type="smallBold">Types de dépenses</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Gestion des types de dépenses de ce compte à venir (ticket #7).
+function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
+  const theme = useTheme();
+  const [edition, setEdition] = useState(false);
+  const [libelle, setLibelle] = useState(item.libelle);
+  const [niveau1, setNiveau1] = useState<Niveau1 | null>(item.niveau1);
+  const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [suppression, setSuppression] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const libelleAccessible = `${item.libelle} (#${item.id})`;
+
+  const handleAnnuler = () => {
+    setLibelle(item.libelle);
+    setNiveau1(item.niveau1);
+    setErrors({});
+    setErreur(null);
+    setEdition(false);
+  };
+
+  const handleEnregistrer = async () => {
+    const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1 });
+    setErrors(erreursValidation);
+
+    if (Object.keys(erreursValidation).length > 0 || niveau1 === null) {
+      return;
+    }
+
+    setErreur(null);
+    setEnregistrement(true);
+    try {
+      await updateTypeDepenseNiveau2(item.id, libelle.trim(), niveau1);
+      setEdition(false);
+    } catch {
+      setErreur('La sauvegarde a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteTypeDepenseNiveau2(item.id);
+    } catch (error) {
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : la
+      // suppression échouera tant que des types niveau 3 dépendent encore
+      // de celui-ci (voir delete-type-depense-niveau2.ts). Pas la peine de
+      // laisser croire qu'un simple réessai suffira.
+      const bloqueParDesEnfants =
+        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
+      setErreur(
+        bloqueParDesEnfants
+          ? 'Suppression impossible : des dépenses sont encore rattachées à ce type.'
+          : 'La suppression a échoué, réessayez.',
+      );
+      setSuppression(false);
+    }
+  };
+
+  const handleSupprimer = () => {
+    Alert.alert(
+      'Supprimer ce type de dépense ?',
+      `« ${item.libelle} » sera définitivement supprimé.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', style: 'destructive', onPress: supprimer },
+      ],
+    );
+  };
+
+  if (edition) {
+    return (
+      <ThemedView type="backgroundElement" style={styles.typeRow}>
+        <TextInput
+          value={libelle}
+          onChangeText={setLibelle}
+          accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
+        />
+        {errors.libelle ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {errors.libelle}
           </ThemedText>
+        ) : null}
+
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+        />
+        {errors.niveau1 ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {errors.niveau1}
+          </ThemedText>
+        ) : null}
+
+        {erreur ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {erreur}
+          </ThemedText>
+        ) : null}
+
+        <ThemedView style={styles.typeRowActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Annuler la modification du type de dépense ${libelleAccessible}`}
+            onPress={handleAnnuler}
+          >
+            <ThemedText type="link">Annuler</ThemedText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Enregistrer le type de dépense ${libelleAccessible}`}
+            disabled={enregistrement}
+            onPress={handleEnregistrer}
+          >
+            <ThemedText type="link">
+              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+            </ThemedText>
+          </Pressable>
         </ThemedView>
-      </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.typeRow}>
+      <ThemedView style={styles.typeRowInfo}>
+        <ThemedText type="smallBold">{item.libelle}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {LIBELLE_NIVEAU1[item.niveau1]}
+        </ThemedText>
+      </ThemedView>
+
+      {erreur ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreur}
+        </ThemedText>
+      ) : null}
+
+      <ThemedView style={styles.typeRowActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Modifier le type de dépense ${libelleAccessible}`}
+          onPress={() => setEdition(true)}
+        >
+          <ThemedText type="link">Modifier</ThemedText>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Supprimer le type de dépense ${libelleAccessible}`}
+          disabled={suppression}
+          onPress={handleSupprimer}
+        >
+          <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
+        </Pressable>
+      </ThemedView>
     </ThemedView>
   );
 }
@@ -170,6 +478,8 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  scrollContent: {
     padding: Spacing.four,
     gap: Spacing.three,
   },
@@ -191,7 +501,37 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   section: {
-    gap: Spacing.one,
+    gap: Spacing.two,
     paddingTop: Spacing.three,
+  },
+  typesList: {
+    gap: Spacing.two,
+  },
+  typeRow: {
+    gap: Spacing.one,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  typeRowInfo: {
+    gap: Spacing.half,
+  },
+  typeRowActions: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
+  ajoutForm: {
+    gap: Spacing.one,
+  },
+  niveau1Row: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  niveau1ChipWrapper: {
+    flex: 1,
+  },
+  niveau1Chip: {
+    alignItems: 'center',
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
   },
 });
