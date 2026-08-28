@@ -28,18 +28,26 @@ export default function EditionCompteScreen() {
   useEffect(() => {
     let annule = false;
 
-    getCompteQuery(compteId).then(([compte]) => {
-      if (annule) {
-        return;
-      }
-      if (compte) {
-        setNom(compte.nom);
-        setBanque(compte.banque);
-      } else {
+    getCompteQuery(compteId)
+      .then(([compte]) => {
+        if (annule) {
+          return;
+        }
+        if (compte) {
+          setNom(compte.nom);
+          setBanque(compte.banque);
+        } else {
+          setIntrouvable(true);
+        }
+        setChargement(false);
+      })
+      .catch(() => {
+        if (annule) {
+          return;
+        }
         setIntrouvable(true);
-      }
-      setChargement(false);
-    });
+        setChargement(false);
+      });
 
     return () => {
       annule = true;
