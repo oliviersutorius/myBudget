@@ -75,6 +75,20 @@ export default function EditionCompteScreen() {
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
   const [succesEnregistrement, setSuccesEnregistrement] = useState(false);
   const [onglet, setOnglet] = useState<Onglet>('budget');
+  // Onglets Dépenses/Revenus/Budget déjà visités : une fois visité, un onglet
+  // reste monté (masqué avec `display: 'none'` plutôt que démonté) pour ne
+  // pas perdre son état (lignes dépliées, année/mois sélectionné, live
+  // queries) à chaque va-et-vient entre onglets.
+  const [ongletsVisites, setOngletsVisites] = useState<ReadonlySet<Onglet>>(
+    () => new Set(['budget']),
+  );
+
+  const changerOnglet = (nouvelOnglet: Onglet) => {
+    setOnglet(nouvelOnglet);
+    setOngletsVisites((precedent) =>
+      precedent.has(nouvelOnglet) ? precedent : new Set(precedent).add(nouvelOnglet),
+    );
+  };
 
   useEffect(() => {
     let annule = false;
@@ -154,7 +168,7 @@ export default function EditionCompteScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <ThemedText type="title">{nom}</ThemedText>
 
-          <BarreOnglets actif={onglet} onChanger={setOnglet} />
+          <BarreOnglets actif={onglet} onChanger={changerOnglet} />
 
           {onglet === 'infos' ? (
             <ThemedView style={styles.section}>
@@ -231,9 +245,21 @@ export default function EditionCompteScreen() {
             </ThemedView>
           ) : null}
 
-          {onglet === 'depenses' ? <DepensesTab compteId={compteId} /> : null}
-          {onglet === 'revenus' ? <RevenusTab /> : null}
-          {onglet === 'budget' ? <BudgetTab /> : null}
+          {ongletsVisites.has('depenses') ? (
+            <ThemedView style={onglet === 'depenses' ? undefined : styles.masqueDisplayNone}>
+              <DepensesTab compteId={compteId} />
+            </ThemedView>
+          ) : null}
+          {ongletsVisites.has('revenus') ? (
+            <ThemedView style={onglet === 'revenus' ? undefined : styles.masqueDisplayNone}>
+              <RevenusTab />
+            </ThemedView>
+          ) : null}
+          {ongletsVisites.has('budget') ? (
+            <ThemedView style={onglet === 'budget' ? undefined : styles.masqueDisplayNone}>
+              <BudgetTab />
+            </ThemedView>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -603,6 +629,10 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
 function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
+  // Une fois dépliée au moins une fois, la liste niveau 3 reste montée (juste
+  // masquée avec `display: 'none'` au repli) pour ne pas perdre un ajout ou
+  // une édition niveau 3 en cours si l'utilisateur replie la ligne parente.
+  const [aEteOuvert, setAEteOuvert] = useState(false);
   const [edition, setEdition] = useState(false);
   const [libelle, setLibelle] = useState(item.libelle);
   const [niveau1, setNiveau1] = useState<Niveau1 | null>(item.niveau1);
@@ -718,7 +748,10 @@ function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
-            onPress={() => setOuvert((valeur) => !valeur)}
+            onPress={() => {
+              setOuvert((valeur) => !valeur);
+              setAEteOuvert(true);
+            }}
             style={styles.typeRowHeader}
           >
             <ThemedText type="smallBold">
@@ -745,16 +778,26 @@ function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
         </ThemedView>
       )}
 
-      {ouvert ? <Niveau3Liste niveau2Id={item.id} niveau1Parent={item.niveau1} /> : null}
+      {aEteOuvert ? (
+        <Niveau3Liste niveau2Id={item.id} niveau1Parent={item.niveau1} masque={!ouvert} />
+      ) : null}
     </>
   );
 }
 
-function Niveau3Liste({ niveau2Id, niveau1Parent }: { niveau2Id: number; niveau1Parent: Niveau1 }) {
+function Niveau3Liste({
+  niveau2Id,
+  niveau1Parent,
+  masque,
+}: {
+  niveau2Id: number;
+  niveau1Parent: Niveau1;
+  masque: boolean;
+}) {
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
 
   return (
-    <ThemedView style={styles.niveau3Section}>
+    <ThemedView style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}>
       {sousTypes.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
           Aucune ligne pour l’instant.
@@ -1037,6 +1080,9 @@ function BudgetTab() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  masqueDisplayNone: {
+    display: 'none',
   },
   safeArea: {
     flex: 1,
