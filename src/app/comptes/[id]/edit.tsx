@@ -500,18 +500,25 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
 
+  // Si le parent sélectionné a été supprimé entre-temps, on ne le considère plus comme
+  // sélectionné : évite de soumettre un niveau2Id devenu inexistant en base.
+  const selectedNiveau2Id = typesNiveau2.some((type2) => type2.id === niveau2Id) ? niveau2Id : null;
+
   const handleAjouter = async () => {
-    const erreursValidation = validateTypeDepenseNiveau3Form({ libelle, niveau2Id });
+    const erreursValidation = validateTypeDepenseNiveau3Form({
+      libelle,
+      niveau2Id: selectedNiveau2Id,
+    });
     setErrors(erreursValidation);
 
-    if (Object.keys(erreursValidation).length > 0 || niveau2Id === null) {
+    if (Object.keys(erreursValidation).length > 0 || selectedNiveau2Id === null) {
       return;
     }
 
     setErreurEnregistrement(null);
     setEnregistrement(true);
     try {
-      await createTypeDepenseNiveau3(niveau2Id, libelle.trim());
+      await createTypeDepenseNiveau3(selectedNiveau2Id, libelle.trim());
       setLibelle('');
       setNiveau2Id(null);
     } catch {
@@ -545,7 +552,7 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
             onPress={() => setNiveau2Id(type2.id)}
           >
             <ThemedView
-              type={niveau2Id === type2.id ? 'backgroundSelected' : 'backgroundElement'}
+              type={selectedNiveau2Id === type2.id ? 'backgroundSelected' : 'backgroundElement'}
               style={styles.niveau2Chip}
             >
               <ThemedText type="small">{type2.libelle}</ThemedText>
