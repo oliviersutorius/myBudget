@@ -22,13 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 type Niveau1 = 'fixe' | 'variable';
 
-type TypeDepenseNiveau2 = {
-  id: number;
-  compteId: number;
-  libelle: string;
-  niveau1: Niveau1;
-  createdAt: string;
-};
+type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
 
 const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
   fixe: 'Fixe',
@@ -194,9 +188,11 @@ export default function EditionCompteScreen() {
 function Niveau1Selector({
   valeur,
   onChanger,
+  accessibilityLabelPrefix,
 }: {
   valeur: Niveau1 | null;
   onChanger: (niveau1: Niveau1) => void;
+  accessibilityLabelPrefix: string;
 }) {
   return (
     <ThemedView style={styles.niveau1Row}>
@@ -204,7 +200,7 @@ function Niveau1Selector({
         <Pressable
           key={option}
           accessibilityRole="button"
-          accessibilityLabel={LIBELLE_NIVEAU1[option]}
+          accessibilityLabel={`${accessibilityLabelPrefix} — ${LIBELLE_NIVEAU1[option]}`}
           onPress={() => onChanger(option)}
           style={styles.niveau1ChipWrapper}
         >
@@ -282,7 +278,11 @@ function TypesDepenseNiveau2Section({ compteId }: { compteId: number }) {
           </ThemedText>
         ) : null}
 
-        <Niveau1Selector valeur={niveau1} onChanger={setNiveau1} />
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix="Nouveau type de dépense"
+        />
         {errors.niveau1 ? (
           <ThemedText type="small" style={styles.errorText}>
             {errors.niveau1}
@@ -319,6 +319,7 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const libelleAccessible = `${item.libelle} (#${item.id})`;
 
   const handleAnnuler = () => {
     setLibelle(item.libelle);
@@ -353,8 +354,18 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
     setSuppression(true);
     try {
       await deleteTypeDepenseNiveau2(item.id);
-    } catch {
-      setErreur('La suppression a échoué, réessayez.');
+    } catch (error) {
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : la
+      // suppression échouera tant que des types niveau 3 dépendent encore
+      // de celui-ci (voir delete-type-depense-niveau2.ts). Pas la peine de
+      // laisser croire qu'un simple réessai suffira.
+      const bloqueParDesEnfants =
+        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
+      setErreur(
+        bloqueParDesEnfants
+          ? 'Suppression impossible : des dépenses sont encore rattachées à ce type.'
+          : 'La suppression a échoué, réessayez.',
+      );
       setSuppression(false);
     }
   };
@@ -372,11 +383,11 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
 
   if (edition) {
     return (
-      <ThemedView type="backgroundElement" style={styles.typeRowEdition}>
+      <ThemedView type="backgroundElement" style={styles.typeRow}>
         <TextInput
           value={libelle}
           onChangeText={setLibelle}
-          accessibilityLabel={`Libellé du type de dépense ${item.libelle}`}
+          accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
           style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
         />
         {errors.libelle ? (
@@ -385,7 +396,11 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
           </ThemedText>
         ) : null}
 
-        <Niveau1Selector valeur={niveau1} onChanger={setNiveau1} />
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+        />
         {errors.niveau1 ? (
           <ThemedText type="small" style={styles.errorText}>
             {errors.niveau1}
@@ -401,14 +416,14 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
         <ThemedView style={styles.typeRowActions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Annuler la modification"
+            accessibilityLabel={`Annuler la modification du type de dépense ${libelleAccessible}`}
             onPress={handleAnnuler}
           >
             <ThemedText type="link">Annuler</ThemedText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Enregistrer le type de dépense ${item.libelle}`}
+            accessibilityLabel={`Enregistrer le type de dépense ${libelleAccessible}`}
             disabled={enregistrement}
             onPress={handleEnregistrer}
           >
@@ -439,14 +454,14 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
       <ThemedView style={styles.typeRowActions}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Modifier le type de dépense ${item.libelle}`}
+          accessibilityLabel={`Modifier le type de dépense ${libelleAccessible}`}
           onPress={() => setEdition(true)}
         >
           <ThemedText type="link">Modifier</ThemedText>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Supprimer le type de dépense ${item.libelle}`}
+          accessibilityLabel={`Supprimer le type de dépense ${libelleAccessible}`}
           disabled={suppression}
           onPress={handleSupprimer}
         >
@@ -493,11 +508,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   typeRow: {
-    gap: Spacing.one,
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-  },
-  typeRowEdition: {
     gap: Spacing.one,
     borderRadius: Spacing.three,
     padding: Spacing.three,
