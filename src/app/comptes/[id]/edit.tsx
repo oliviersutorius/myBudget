@@ -225,6 +225,70 @@ function Niveau1Selector({
   );
 }
 
+// Boutons Modifier/Supprimer partagés entre les lignes niveau 2 et niveau 3
+// (même comportement, seuls les libellés accessibles diffèrent).
+function LigneActionsAffichage({
+  labelModifier,
+  labelSupprimer,
+  suppression,
+  onModifier,
+  onSupprimer,
+}: {
+  labelModifier: string;
+  labelSupprimer: string;
+  suppression: boolean;
+  onModifier: () => void;
+  onSupprimer: () => void;
+}) {
+  return (
+    <ThemedView style={styles.typeRowActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel={labelModifier} onPress={onModifier}>
+        <ThemedText type="link">Modifier</ThemedText>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={labelSupprimer}
+        disabled={suppression}
+        onPress={onSupprimer}
+      >
+        <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
+      </Pressable>
+    </ThemedView>
+  );
+}
+
+// Boutons Annuler/Enregistrer partagés entre les lignes niveau 2 et niveau 3
+// en édition.
+function LigneActionsEdition({
+  labelAnnuler,
+  labelEnregistrer,
+  enregistrement,
+  onAnnuler,
+  onEnregistrer,
+}: {
+  labelAnnuler: string;
+  labelEnregistrer: string;
+  enregistrement: boolean;
+  onAnnuler: () => void;
+  onEnregistrer: () => void;
+}) {
+  return (
+    <ThemedView style={styles.typeRowActions}>
+      <Pressable accessibilityRole="button" accessibilityLabel={labelAnnuler} onPress={onAnnuler}>
+        <ThemedText type="link">Annuler</ThemedText>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={labelEnregistrer}
+        disabled={enregistrement}
+        onPress={onEnregistrer}
+      >
+        <ThemedText type="link">{enregistrement ? 'Enregistrement…' : 'Enregistrer'}</ThemedText>
+      </Pressable>
+    </ThemedView>
+  );
+}
+
 function TypesDepenseNiveau2Section({ compteId }: { compteId: number }) {
   const theme = useTheme();
   const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
@@ -390,108 +454,96 @@ function TypeDepenseNiveau2Row({ item }: { item: TypeDepenseNiveau2 }) {
     );
   };
 
-  if (edition) {
-    return (
-      <ThemedView type="backgroundElement" style={styles.typeRow}>
-        <TextInput
-          value={libelle}
-          onChangeText={setLibelle}
-          accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.libelle ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {errors.libelle}
-          </ThemedText>
-        ) : null}
-
-        <Niveau1Selector
-          valeur={niveau1}
-          onChanger={setNiveau1}
-          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
-        />
-        {errors.niveau1 ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {errors.niveau1}
-          </ThemedText>
-        ) : null}
-
-        {erreur ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {erreur}
-          </ThemedText>
-        ) : null}
-
-        <ThemedView style={styles.typeRowActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Annuler la modification du type de dépense ${libelleAccessible}`}
-            onPress={handleAnnuler}
-          >
-            <ThemedText type="link">Annuler</ThemedText>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Enregistrer le type de dépense ${libelleAccessible}`}
-            disabled={enregistrement}
-            onPress={handleEnregistrer}
-          >
-            <ThemedText type="link">
-              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-            </ThemedText>
-          </Pressable>
-        </ThemedView>
-      </ThemedView>
-    );
-  }
-
   return (
-    <ThemedView type="backgroundElement" style={styles.typeRow}>
-      <ThemedView style={styles.typeRowInfo}>
-        <ThemedText type="smallBold">{item.libelle}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {LIBELLE_NIVEAU1[item.niveau1]}
-        </ThemedText>
-      </ThemedView>
+    <>
+      {edition ? (
+        <ThemedView type="backgroundElement" style={styles.typeRow}>
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" style={styles.errorText}>
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
 
-      {erreur ? (
-        <ThemedText type="small" style={styles.errorText}>
-          {erreur}
-        </ThemedText>
-      ) : null}
+          <Niveau1Selector
+            valeur={niveau1}
+            onChanger={setNiveau1}
+            accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+          />
+          {errors.niveau1 ? (
+            <ThemedText type="small" style={styles.errorText}>
+              {errors.niveau1}
+            </ThemedText>
+          ) : null}
 
-      <ThemedView style={styles.typeRowActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Modifier le type de dépense ${libelleAccessible}`}
-          onPress={() => setEdition(true)}
-        >
-          <ThemedText type="link">Modifier</ThemedText>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Supprimer le type de dépense ${libelleAccessible}`}
-          disabled={suppression}
-          onPress={handleSupprimer}
-        >
-          <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
-        </Pressable>
-      </ThemedView>
+          {erreur ? (
+            <ThemedText type="small" style={styles.errorText}>
+              {erreur}
+            </ThemedText>
+          ) : null}
 
-      <TypesDepenseNiveau3Section niveau2Id={item.id} niveau1Parent={item.niveau1} />
-    </ThemedView>
+          <LigneActionsEdition
+            labelAnnuler={`Annuler la modification du type de dépense ${libelleAccessible}`}
+            labelEnregistrer={`Enregistrer le type de dépense ${libelleAccessible}`}
+            enregistrement={enregistrement}
+            onAnnuler={handleAnnuler}
+            onEnregistrer={handleEnregistrer}
+          />
+        </ThemedView>
+      ) : (
+        <ThemedView type="backgroundElement" style={styles.typeRow}>
+          <ThemedView style={styles.typeRowInfo}>
+            <ThemedText type="smallBold">{item.libelle}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {LIBELLE_NIVEAU1[item.niveau1]}
+            </ThemedText>
+          </ThemedView>
+
+          {erreur ? (
+            <ThemedText type="small" style={styles.errorText}>
+              {erreur}
+            </ThemedText>
+          ) : null}
+
+          <LigneActionsAffichage
+            labelModifier={`Modifier le type de dépense ${libelleAccessible}`}
+            labelSupprimer={`Supprimer le type de dépense ${libelleAccessible}`}
+            suppression={suppression}
+            onModifier={() => setEdition(true)}
+            onSupprimer={handleSupprimer}
+          />
+        </ThemedView>
+      )}
+
+      {/* Toujours monté (même en édition du niveau 2) pour ne pas perdre un
+          ajout/une édition de ligne niveau 3 en cours si l'utilisateur
+          bascule la ligne niveau 2 en édition entre-temps. */}
+      <TypesDepenseNiveau3Section
+        niveau2Id={item.id}
+        niveau2Libelle={item.libelle}
+        niveau1Parent={item.niveau1}
+      />
+    </>
   );
 }
 
 function TypesDepenseNiveau3Section({
   niveau2Id,
+  niveau2Libelle,
   niveau1Parent,
 }: {
   niveau2Id: number;
+  niveau2Libelle: string;
   niveau1Parent: Niveau1;
 }) {
   const theme = useTheme();
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
+  const niveau2Accessible = `${niveau2Libelle} (#${niveau2Id})`;
 
   const [libelle, setLibelle] = useState('');
   const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
@@ -542,7 +594,7 @@ function TypesDepenseNiveau3Section({
           onChangeText={setLibelle}
           placeholder="Ex. Crédit immobilier"
           placeholderTextColor={theme.textSecondary}
-          accessibilityLabel="Libellé de la nouvelle ligne"
+          accessibilityLabel={`Libellé de la nouvelle ligne du type de dépense ${niveau2Accessible}`}
           style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
         />
         {errors.libelle ? (
@@ -559,7 +611,7 @@ function TypesDepenseNiveau3Section({
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Ajouter une ligne"
+          accessibilityLabel={`Ajouter une ligne au type de dépense ${niveau2Accessible}`}
           disabled={enregistrement}
           onPress={handleAjouter}
         >
@@ -615,23 +667,32 @@ function TypeDepenseNiveau3Row({
     }
   };
 
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteTypeDepenseNiveau3(item.id);
+    } catch (error) {
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : dès que le
+      // ticket #9 insère des montants historisés, la suppression échouera
+      // tant que des montants dépendent encore de cette ligne (voir
+      // delete-type-depense-niveau3.ts). Pas la peine de laisser croire
+      // qu'un simple réessai suffira.
+      const bloqueParDesEnfants =
+        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
+      setErreur(
+        bloqueParDesEnfants
+          ? 'Suppression impossible : des montants sont encore rattachés à cette ligne.'
+          : 'La suppression a échoué, réessayez.',
+      );
+      setSuppression(false);
+    }
+  };
+
   const handleSupprimer = () => {
     Alert.alert('Supprimer cette ligne ?', `« ${item.libelle} » sera définitivement supprimée.`, [
       { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: async () => {
-          setErreur(null);
-          setSuppression(true);
-          try {
-            await deleteTypeDepenseNiveau3(item.id);
-          } catch {
-            setErreur('La suppression a échoué, réessayez.');
-            setSuppression(false);
-          }
-        },
-      },
+      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
     ]);
   };
 
@@ -656,25 +717,13 @@ function TypeDepenseNiveau3Row({
           </ThemedText>
         ) : null}
 
-        <ThemedView style={styles.typeRowActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Annuler la modification de la ligne ${libelleAccessible}`}
-            onPress={handleAnnuler}
-          >
-            <ThemedText type="link">Annuler</ThemedText>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Enregistrer la ligne ${libelleAccessible}`}
-            disabled={enregistrement}
-            onPress={handleEnregistrer}
-          >
-            <ThemedText type="link">
-              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
-            </ThemedText>
-          </Pressable>
-        </ThemedView>
+        <LigneActionsEdition
+          labelAnnuler={`Annuler la modification de la ligne ${libelleAccessible}`}
+          labelEnregistrer={`Enregistrer la ligne ${libelleAccessible}`}
+          enregistrement={enregistrement}
+          onAnnuler={handleAnnuler}
+          onEnregistrer={handleEnregistrer}
+        />
       </ThemedView>
     );
   }
@@ -694,23 +743,13 @@ function TypeDepenseNiveau3Row({
         </ThemedText>
       ) : null}
 
-      <ThemedView style={styles.typeRowActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Modifier la ligne ${libelleAccessible}`}
-          onPress={() => setEdition(true)}
-        >
-          <ThemedText type="link">Modifier</ThemedText>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Supprimer la ligne ${libelleAccessible}`}
-          disabled={suppression}
-          onPress={handleSupprimer}
-        >
-          <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
-        </Pressable>
-      </ThemedView>
+      <LigneActionsAffichage
+        labelModifier={`Modifier la ligne ${libelleAccessible}`}
+        labelSupprimer={`Supprimer la ligne ${libelleAccessible}`}
+        suppression={suppression}
+        onModifier={() => setEdition(true)}
+        onSupprimer={handleSupprimer}
+      />
     </ThemedView>
   );
 }
