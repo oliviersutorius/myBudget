@@ -17,6 +17,7 @@ export default function CreationCompteScreen() {
   const [banque, setBanque] = useState('');
   const [errors, setErrors] = useState<CompteFormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
 
   const handleValider = async () => {
     const erreursValidation = validateCompteForm({ nom, banque });
@@ -26,9 +27,15 @@ export default function CreationCompteScreen() {
       return;
     }
 
+    setErreurEnregistrement(null);
     setEnregistrement(true);
-    await createCompte(nom.trim(), banque.trim());
-    router.back();
+    try {
+      await createCompte(nom.trim(), banque.trim());
+      router.back();
+    } catch {
+      setErreurEnregistrement('La création a échoué, réessayez.');
+      setEnregistrement(false);
+    }
   };
 
   return (
@@ -69,6 +76,12 @@ export default function CreationCompteScreen() {
             </ThemedText>
           ) : null}
         </ThemedView>
+
+        {erreurEnregistrement ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {erreurEnregistrement}
+          </ThemedText>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
