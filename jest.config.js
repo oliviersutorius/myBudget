@@ -12,6 +12,7 @@ module.exports = {
     '!src/db/client.ts', // wiring de la connexion SQLite native — testé via l'e2e Maestro, pas en unitaire
     '!src/db/queries/get-montant-depense-niveau3.ts', // wiring Drizzle mince — logique de résolution testée séparément (resolve-montant-depense.ts)
     '!src/db/queries/get-comptes.ts', // requête déclarative pure (comme schema.ts) — rien à tester unitairement
+    '!src/db/queries/create-compte.ts', // idem : insertion mince, validation testée séparément (validate-compte-form.ts)
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro
     '!src/components/animated-icon.web.tsx',
 
