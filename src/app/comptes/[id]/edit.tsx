@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -1021,42 +1021,42 @@ function RevenusTab({ compteId }: { compteId: number }) {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={formulaireOuvert ? 'Annuler l’ajout d’un revenu' : 'Ajouter un revenu'}
+        accessibilityLabel={formulaireOuvert ? 'Fermer le formulaire d’ajout' : 'Ajouter un revenu'}
         onPress={() => setFormulaireOuvert((valeur) => !valeur)}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
           <ThemedText type="smallBold">
-            {formulaireOuvert ? 'Annuler' : '+ Ajouter un revenu'}
+            {formulaireOuvert ? 'Fermer' : '+ Ajouter un revenu'}
           </ThemedText>
         </ThemedView>
       </Pressable>
 
-      {formulaireOuvert ? (
-        <AjoutRevenuForm
-          compteId={compteId}
-          mois={mois}
-          onAjoute={() => setFormulaireOuvert(false)}
-        />
-      ) : null}
+      {/* Le formulaire reste ouvert après un ajout réussi (juste vidé) pour
+          permettre d'enchaîner plusieurs revenus du mois sans le rouvrir à
+          chaque fois — plusieurs revenus par mois sont attendus (voir
+          commentaire de RevenusTab ci-dessus). */}
+      {formulaireOuvert ? <AjoutRevenuForm compteId={compteId} mois={mois} /> : null}
     </ThemedView>
   );
 }
 
-function AjoutRevenuForm({
-  compteId,
-  mois,
-  onAjoute,
-}: {
-  compteId: number;
-  mois: string;
-  onAjoute: () => void;
-}) {
+function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string }) {
   const theme = useTheme();
   const [libelle, setLibelle] = useState('');
   const [montant, setMontant] = useState('');
   const [errors, setErrors] = useState<RevenuFormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  // Le bouton qui referme ce formulaire (dans RevenusTab) reste actif
+  // pendant l'enregistrement : ce ref évite d'appeler setState après un
+  // démontage si l'utilisateur ferme le formulaire pendant l'await.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
 
   const handleAjouter = async () => {
     const erreursValidation = validateRevenuForm({ libelle, montant });
@@ -1071,13 +1071,18 @@ function AjoutRevenuForm({
     setEnregistrement(true);
     try {
       await createRevenu(compteId, mois, libelle.trim(), montantEnCentimes);
-      setLibelle('');
-      setMontant('');
-      onAjoute();
+      if (monte.current) {
+        setLibelle('');
+        setMontant('');
+      }
     } catch {
-      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+      if (monte.current) {
+        setErreurEnregistrement('L’ajout a échoué, réessayez.');
+      }
     } finally {
-      setEnregistrement(false);
+      if (monte.current) {
+        setEnregistrement(false);
+      }
     }
   };
 

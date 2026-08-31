@@ -13,8 +13,20 @@ describe('parseMontantEnCentimes', () => {
     expect(parseMontantEnCentimes('1500')).toBe(150000);
   });
 
-  it('arrondit au centime le plus proche', () => {
-    expect(parseMontantEnCentimes('12.345')).toBe(1235);
+  it('rejette une saisie à plus de 2 décimales plutôt que de l’arrondir silencieusement', () => {
+    expect(parseMontantEnCentimes('12.345')).toBeNull();
+  });
+
+  it('rejette un montant qui s’arrondirait à 0 centime', () => {
+    expect(parseMontantEnCentimes('0.004')).toBeNull();
+  });
+
+  it('rejette une virgule utilisée comme séparateur de milliers', () => {
+    expect(parseMontantEnCentimes('1,500')).toBeNull();
+  });
+
+  it('accepte une seule décimale', () => {
+    expect(parseMontantEnCentimes('12.5')).toBe(1250);
   });
 
   it('ignore les espaces de bord', () => {
