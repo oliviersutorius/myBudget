@@ -40,3 +40,13 @@ const FORMATEUR_EUROS = new Intl.NumberFormat('fr-FR', {
 export function formatCentimesEnEuros(centimes: number): string {
   return FORMATEUR_EUROS.format(centimes / 100);
 }
+
+/**
+ * Convertit un montant en centimes vers une saisie éditable, réinjectable
+ * telle quelle dans un champ de formulaire (ex. 1234 -> "12,34") : à
+ * l'inverse de `formatCentimesEnEuros`, sans symbole monétaire ni espace
+ * insécable, pour pré-remplir un formulaire de modification (ticket #12).
+ */
+export function centimesEnSaisie(centimes: number): string {
+  return (centimes / 100).toFixed(2).replace('.', ',');
+}

@@ -11,12 +11,14 @@ import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
+import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import { updateCompte } from '@/db/queries/update-compte';
+import { updateRevenu } from '@/db/queries/update-revenu';
 import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
 import { updateTypeDepenseNiveau3 } from '@/db/queries/update-type-depense-niveau3';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
@@ -31,13 +33,15 @@ import {
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
 import { decalerMois } from '@/utils/mois';
-import { formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
+import { centimesEnSaisie, formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
 type Niveau1 = 'fixe' | 'variable';
 type Onglet = 'infos' | 'depenses' | 'revenus' | 'budget';
 
 type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
 type TypeDepenseNiveau3 = Awaited<ReturnType<typeof getTypesDepenseNiveau3Query>>[number];
+type Revenu = Awaited<ReturnType<typeof getRevenusQuery>>[number];
+type RevenuFormulaireEtat = { mode: 'ajout' } | { mode: 'edition'; revenu: Revenu } | null;
 
 const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
   fixe: 'Fixe',
@@ -982,17 +986,33 @@ function TypeDepenseNiveau3Row({
   );
 }
 
-// Onglet Revenus (ticket #12) : liste et ajout des revenus du compte, pour
-// un mois navigable (mois calendaire, mois courant par défaut — voir
-// moisCourant() ci-dessus). Plusieurs revenus sont possibles pour un même
-// mois (voir ticket #34). Navigation mois par mois indépendante de l'onglet
-// Budget (pas d'état de mois partagé entre les deux onglets, voir #34).
+// Onglet Revenus (ticket #12) : liste, ajout, modification et suppression
+// des revenus du compte, pour un mois navigable (mois calendaire, mois
+// courant par défaut — voir moisCourant() ci-dessus). Plusieurs revenus sont
+// possibles pour un même mois (voir ticket #34). Navigation mois par mois
+// indépendante de l'onglet Budget (pas d'état de mois partagé entre les
+// deux onglets, voir #34).
+//
+// Modifier/Supprimer sur chaque ligne : bouton « ⋮ » ouvrant un menu à 2
+// actions (option C validée par le développeur parmi 3 propositions
+// graphiques — voir ticket #26 pour en généraliser le style aux autres
+// listes de l'app). Modifier affiche le formulaire pré-rempli sous le
+// tableau (même emplacement que l'ajout) ; Supprimer ouvre une popup de
+// confirmation dédiée.
 function RevenusTab({ compteId }: { compteId: number }) {
   const [mois, setMois] = useState(() => moisCourant());
   const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
-  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [formulaire, setFormulaire] = useState<RevenuFormulaireEtat>(null);
   const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
   const [annee, moisIndex] = mois.split('-').map(Number);
+
+  // Changer de mois ferme le formulaire ouvert : un ajout/une modification
+  // en cours ne doit pas se retrouver silencieusement rattaché(e) à un
+  // autre mois que celui affiché à l'écran au moment de l'ouverture.
+  const changerMois = (delta: number) => {
+    setFormulaire(null);
+    setMois((valeur) => decalerMois(valeur, delta));
+  };
 
   return (
     <ThemedView style={styles.section}>
@@ -1002,7 +1022,7 @@ function RevenusTab({ compteId }: { compteId: number }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Mois précédent"
-          onPress={() => setMois((valeur) => decalerMois(valeur, -1))}
+          onPress={() => changerMois(-1)}
         >
           <ThemedText type="title" style={styles.anneeChevron}>
             ‹
@@ -1014,7 +1034,7 @@ function RevenusTab({ compteId }: { compteId: number }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Mois suivant"
-          onPress={() => setMois((valeur) => decalerMois(valeur, 1))}
+          onPress={() => changerMois(1)}
         >
           <ThemedText type="title" style={styles.anneeChevron}>
             ›
@@ -1029,10 +1049,11 @@ function RevenusTab({ compteId }: { compteId: number }) {
       ) : (
         <ThemedView style={styles.typesList}>
           {revenusDuMois.map((revenu) => (
-            <ThemedView key={revenu.id} type="backgroundElement" style={styles.moisRow}>
-              <ThemedText type="small">{revenu.libelle}</ThemedText>
-              <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
-            </ThemedView>
+            <RevenuRow
+              key={revenu.id}
+              revenu={revenu}
+              onModifier={() => setFormulaire({ mode: 'edition', revenu })}
+            />
           ))}
         </ThemedView>
       )}
@@ -1046,29 +1067,112 @@ function RevenusTab({ compteId }: { compteId: number }) {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={formulaireOuvert ? 'Fermer le formulaire d’ajout' : 'Ajouter un revenu'}
-        onPress={() => setFormulaireOuvert((valeur) => !valeur)}
+        accessibilityLabel={formulaire ? 'Fermer le formulaire' : 'Ajouter un revenu'}
+        onPress={() => setFormulaire((valeur) => (valeur ? null : { mode: 'ajout' }))}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">
-            {formulaireOuvert ? 'Fermer' : '+ Ajouter un revenu'}
-          </ThemedText>
+          <ThemedText type="smallBold">{formulaire ? 'Fermer' : '+ Ajouter un revenu'}</ThemedText>
         </ThemedView>
       </Pressable>
 
-      {/* Le formulaire reste ouvert après un ajout réussi (juste vidé) pour
-          permettre d'enchaîner plusieurs revenus du mois sans le rouvrir à
-          chaque fois — plusieurs revenus par mois sont attendus (voir
-          commentaire de RevenusTab ci-dessus). */}
-      {formulaireOuvert ? <AjoutRevenuForm compteId={compteId} mois={mois} /> : null}
+      {/* En ajout, le formulaire reste ouvert après un enregistrement réussi
+          (juste vidé) pour enchaîner plusieurs revenus du mois sans le
+          rouvrir à chaque fois. En modification, il se referme après un
+          enregistrement réussi (une ligne à la fois, comme les formulaires
+          d'édition niveau 2/3 de l'onglet Dépenses). */}
+      {formulaire ? (
+        <RevenuForm
+          key={formulaire.mode === 'edition' ? formulaire.revenu.id : 'ajout'}
+          compteId={compteId}
+          mois={mois}
+          revenuExistant={formulaire.mode === 'edition' ? formulaire.revenu : null}
+          onModificationEnregistree={() => setFormulaire(null)}
+        />
+      ) : null}
     </ThemedView>
   );
 }
 
-function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string }) {
+function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => void }) {
+  const [suppression, setSuppression] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteRevenu(revenu.id);
+    } catch {
+      setErreur('La suppression a échoué, réessayez.');
+      setSuppression(false);
+    }
+  };
+
+  const confirmerSuppression = () => {
+    Alert.alert('Supprimer ce revenu ?', `« ${revenu.libelle} » sera définitivement supprimé.`, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
+    ]);
+  };
+
+  const ouvrirActions = () => {
+    Alert.alert(revenu.libelle, formatCentimesEnEuros(revenu.montant), [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Modifier', onPress: onModifier },
+      { text: 'Supprimer', style: 'destructive', onPress: confirmerSuppression },
+    ]);
+  };
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.revenuCard}>
+      <ThemedView style={styles.revenuCardRow}>
+        <ThemedText type="small">{revenu.libelle}</ThemedText>
+        <ThemedView style={styles.revenuCardRight}>
+          <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Actions pour le revenu ${revenu.libelle}`}
+            disabled={suppression}
+            hitSlop={Spacing.two}
+            onPress={ouvrirActions}
+          >
+            <ThemedText type="title" style={styles.kebabGlyph}>
+              ⋮
+            </ThemedText>
+          </Pressable>
+        </ThemedView>
+      </ThemedView>
+
+      {erreur ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreur}
+        </ThemedText>
+      ) : null}
+    </ThemedView>
+  );
+}
+
+// Formulaire partagé ajout/modification d'un revenu, affiché sous le
+// tableau des revenus. `revenuExistant` distingue les deux modes : en
+// modification, les champs sont pré-remplis et l'enregistrement referme le
+// formulaire ; en ajout, il reste ouvert et vidé pour enchaîner plusieurs
+// revenus (voir commentaire de RevenusTab).
+function RevenuForm({
+  compteId,
+  mois,
+  revenuExistant,
+  onModificationEnregistree,
+}: {
+  compteId: number;
+  mois: string;
+  revenuExistant: Revenu | null;
+  onModificationEnregistree: () => void;
+}) {
   const theme = useTheme();
-  const [libelle, setLibelle] = useState('');
-  const [montant, setMontant] = useState('');
+  const [libelle, setLibelle] = useState(revenuExistant?.libelle ?? '');
+  const [montant, setMontant] = useState(
+    revenuExistant ? centimesEnSaisie(revenuExistant.montant) : '',
+  );
   const [errors, setErrors] = useState<RevenuFormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
@@ -1083,7 +1187,7 @@ function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string })
     [],
   );
 
-  const handleAjouter = async () => {
+  const handleValider = async () => {
     const erreursValidation = validateRevenuForm({ libelle, montant });
     setErrors(erreursValidation);
 
@@ -1095,14 +1199,23 @@ function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string })
     setErreurEnregistrement(null);
     setEnregistrement(true);
     try {
-      await createRevenu(compteId, mois, libelle.trim(), montantEnCentimes);
-      if (monte.current) {
-        setLibelle('');
-        setMontant('');
+      if (revenuExistant) {
+        await updateRevenu(revenuExistant.id, libelle.trim(), montantEnCentimes);
+        if (monte.current) {
+          onModificationEnregistree();
+        }
+      } else {
+        await createRevenu(compteId, mois, libelle.trim(), montantEnCentimes);
+        if (monte.current) {
+          setLibelle('');
+          setMontant('');
+        }
       }
     } catch {
       if (monte.current) {
-        setErreurEnregistrement('L’ajout a échoué, réessayez.');
+        setErreurEnregistrement(
+          revenuExistant ? 'La modification a échoué, réessayez.' : 'L’ajout a échoué, réessayez.',
+        );
       }
     } finally {
       if (monte.current) {
@@ -1118,7 +1231,7 @@ function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string })
         onChangeText={setLibelle}
         placeholder="Ex. Salaire"
         placeholderTextColor={theme.textSecondary}
-        accessibilityLabel="Libellé du nouveau revenu"
+        accessibilityLabel="Libellé du revenu"
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.libelle ? (
@@ -1133,7 +1246,7 @@ function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string })
         placeholder="Ex. 1500"
         placeholderTextColor={theme.textSecondary}
         keyboardType="decimal-pad"
-        accessibilityLabel="Montant du nouveau revenu"
+        accessibilityLabel="Montant du revenu"
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.montant ? (
@@ -1150,12 +1263,22 @@ function AjoutRevenuForm({ compteId, mois }: { compteId: number; mois: string })
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Valider l’ajout du revenu"
+        accessibilityLabel={
+          revenuExistant ? 'Enregistrer la modification du revenu' : 'Valider l’ajout du revenu'
+        }
         disabled={enregistrement}
-        onPress={handleAjouter}
+        onPress={handleValider}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
+          <ThemedText type="smallBold">
+            {enregistrement
+              ? revenuExistant
+                ? 'Enregistrement…'
+                : 'Ajout…'
+              : revenuExistant
+                ? 'Enregistrer'
+                : 'Ajouter'}
+          </ThemedText>
         </ThemedView>
       </Pressable>
     </ThemedView>
@@ -1367,5 +1490,25 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  revenuCard: {
+    gap: Spacing.one,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  revenuCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  revenuCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  kebabGlyph: {
+    fontSize: 20,
+    lineHeight: 20,
   },
 });

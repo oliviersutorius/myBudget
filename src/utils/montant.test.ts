@@ -1,4 +1,4 @@
-import { formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
+import { centimesEnSaisie, formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
 describe('parseMontantEnCentimes', () => {
   it('parse un montant avec un point décimal', () => {
@@ -78,5 +78,23 @@ describe('formatCentimesEnEuros', () => {
 
   it('formate zéro', () => {
     expect(formatCentimesEnEuros(0)).toBe(`0,00${ESPACE_INSECABLE}€`);
+  });
+});
+
+describe('centimesEnSaisie', () => {
+  it('convertit des centimes en saisie décimale avec virgule', () => {
+    expect(centimesEnSaisie(1234)).toBe('12,34');
+  });
+
+  it('conserve les zéros décimaux', () => {
+    expect(centimesEnSaisie(150000)).toBe('1500,00');
+  });
+
+  it('ne comporte ni symbole monétaire ni séparateur de milliers', () => {
+    expect(centimesEnSaisie(150000)).not.toMatch(/[€\s]/);
+  });
+
+  it('round-trip avec parseMontantEnCentimes', () => {
+    expect(parseMontantEnCentimes(centimesEnSaisie(150050))).toBe(150050);
   });
 });
