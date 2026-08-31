@@ -8,16 +8,19 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
+import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
+import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import { updateCompte } from '@/db/queries/update-compte';
 import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
 import { updateTypeDepenseNiveau3 } from '@/db/queries/update-type-depense-niveau3';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
+import { validateRevenuForm, type RevenuFormErrors } from '@/forms/validate-revenu-form';
 import {
   validateTypeDepenseNiveau2Form,
   type TypeDepenseNiveau2FormErrors,
@@ -27,6 +30,7 @@ import {
   type TypeDepenseNiveau3FormErrors,
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
 type Niveau1 = 'fixe' | 'variable';
 type Onglet = 'infos' | 'depenses' | 'revenus' | 'budget';
@@ -60,6 +64,15 @@ const MOIS_LIBELLES = [
   'Novembre',
   'Décembre',
 ];
+
+// Mois calendaire courant au format 'YYYY-MM' (voir src/db/schema.ts).
+// Le choix du mois courant comme mois par défaut de l'onglet Revenus (plutôt
+// que le dernier mois consulté sur l'onglet Budget) a été tranché à la
+// demande du développeur — point laissé ouvert par le ticket #34.
+function moisCourant(): string {
+  const maintenant = new Date();
+  return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -252,7 +265,7 @@ export default function EditionCompteScreen() {
           ) : null}
           {ongletsVisites.has('revenus') ? (
             <ThemedView style={onglet === 'revenus' ? undefined : styles.masqueDisplayNone}>
-              <RevenusTab />
+              <RevenusTab compteId={compteId} />
             </ThemedView>
           ) : null}
           {ongletsVisites.has('budget') ? (
@@ -968,34 +981,153 @@ function TypeDepenseNiveau3Row({
   );
 }
 
-// Onglet placeholder : la lecture/l'écriture des revenus est le scope du
-// ticket #12 ("Ajout d'un revenu sur un mois donné"). Cet onglet pose
-// seulement le point d'entrée (voir ticket #34).
-function RevenusTab() {
-  const [formulaireDemande, setFormulaireDemande] = useState(false);
+// Onglet Revenus (ticket #12) : liste et ajout des revenus du compte pour le
+// mois courant (mois calendaire, voir moisCourant() ci-dessus). Plusieurs
+// revenus sont possibles pour un même mois (voir ticket #34).
+function RevenusTab({ compteId }: { compteId: number }) {
+  const [mois] = useState(() => moisCourant());
+  const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
+  const [annee, moisIndex] = mois.split('-').map(Number);
 
   return (
     <ThemedView style={styles.section}>
-      <ThemedText type="smallBold">Revenus</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Aucun revenu pour l’instant.
+      <ThemedText type="smallBold">
+        Revenus — {MOIS_LIBELLES[moisIndex - 1]} {annee}
       </ThemedText>
+
+      {revenusDuMois.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Aucun revenu pour l’instant.
+        </ThemedText>
+      ) : (
+        <ThemedView style={styles.typesList}>
+          {revenusDuMois.map((revenu) => (
+            <ThemedView key={revenu.id} type="backgroundElement" style={styles.moisRow}>
+              <ThemedText type="small">{revenu.libelle}</ThemedText>
+              <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
+            </ThemedView>
+          ))}
+        </ThemedView>
+      )}
+
+      <ThemedView style={styles.totalRow}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Total
+        </ThemedText>
+        <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
+      </ThemedView>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Ajouter un revenu"
-        onPress={() => setFormulaireDemande(true)}
+        accessibilityLabel={formulaireOuvert ? 'Annuler l’ajout d’un revenu' : 'Ajouter un revenu'}
+        onPress={() => setFormulaireOuvert((valeur) => !valeur)}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">+ Ajouter un revenu</ThemedText>
+          <ThemedText type="smallBold">
+            {formulaireOuvert ? 'Annuler' : '+ Ajouter un revenu'}
+          </ThemedText>
         </ThemedView>
       </Pressable>
 
-      {formulaireDemande ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Formulaire d’ajout à venir (ticket #12).
+      {formulaireOuvert ? (
+        <AjoutRevenuForm
+          compteId={compteId}
+          mois={mois}
+          onAjoute={() => setFormulaireOuvert(false)}
+        />
+      ) : null}
+    </ThemedView>
+  );
+}
+
+function AjoutRevenuForm({
+  compteId,
+  mois,
+  onAjoute,
+}: {
+  compteId: number;
+  mois: string;
+  onAjoute: () => void;
+}) {
+  const theme = useTheme();
+  const [libelle, setLibelle] = useState('');
+  const [montant, setMontant] = useState('');
+  const [errors, setErrors] = useState<RevenuFormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+
+  const handleAjouter = async () => {
+    const erreursValidation = validateRevenuForm({ libelle, montant });
+    setErrors(erreursValidation);
+
+    const montantEnCentimes = parseMontantEnCentimes(montant);
+    if (Object.keys(erreursValidation).length > 0 || montantEnCentimes === null) {
+      return;
+    }
+
+    setErreurEnregistrement(null);
+    setEnregistrement(true);
+    try {
+      await createRevenu(compteId, mois, libelle.trim(), montantEnCentimes);
+      setLibelle('');
+      setMontant('');
+      onAjoute();
+    } catch {
+      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  return (
+    <ThemedView style={styles.ajoutForm}>
+      <TextInput
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Salaire"
+        placeholderTextColor={theme.textSecondary}
+        accessibilityLabel="Libellé du nouveau revenu"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.libelle ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.libelle}
         </ThemedText>
       ) : null}
+
+      <TextInput
+        value={montant}
+        onChangeText={setMontant}
+        placeholder="Ex. 1500"
+        placeholderTextColor={theme.textSecondary}
+        keyboardType="decimal-pad"
+        accessibilityLabel="Montant du nouveau revenu"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.montant ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.montant}
+        </ThemedText>
+      ) : null}
+
+      {erreurEnregistrement ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreurEnregistrement}
+        </ThemedText>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Valider l’ajout du revenu"
+        disabled={enregistrement}
+        onPress={handleAjouter}
+      >
+        <ThemedView type="backgroundElement" style={styles.submitButton}>
+          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
+        </ThemedView>
+      </Pressable>
     </ThemedView>
   );
 }

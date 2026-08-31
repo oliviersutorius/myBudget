@@ -23,6 +23,8 @@ module.exports = {
     '!src/db/queries/create-type-depense-niveau3.ts', // idem : insertion mince, validation testée séparément (validate-type-depense-niveau3-form.ts)
     '!src/db/queries/update-type-depense-niveau3.ts', // idem : mise à jour mince, validation testée séparément (validate-type-depense-niveau3-form.ts)
     '!src/db/queries/delete-type-depense-niveau3.ts', // idem : suppression mince
+    '!src/db/queries/create-revenu.ts', // idem : insertion mince, validation testée séparément (validate-revenu-form.ts)
+    '!src/db/queries/get-revenus.ts', // idem : requête déclarative pure
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro
     '!src/components/animated-icon.web.tsx',
 
