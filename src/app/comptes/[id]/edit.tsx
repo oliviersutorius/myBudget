@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,16 +8,21 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
+import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
+import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
+import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import { updateCompte } from '@/db/queries/update-compte';
+import { updateRevenu } from '@/db/queries/update-revenu';
 import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
 import { updateTypeDepenseNiveau3 } from '@/db/queries/update-type-depense-niveau3';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
+import { validateRevenuForm, type RevenuFormErrors } from '@/forms/validate-revenu-form';
 import {
   validateTypeDepenseNiveau2Form,
   type TypeDepenseNiveau2FormErrors,
@@ -27,12 +32,16 @@ import {
   type TypeDepenseNiveau3FormErrors,
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
+import { decalerMois } from '@/utils/mois';
+import { centimesEnSaisie, formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
 type Niveau1 = 'fixe' | 'variable';
 type Onglet = 'infos' | 'depenses' | 'revenus' | 'budget';
 
 type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
 type TypeDepenseNiveau3 = Awaited<ReturnType<typeof getTypesDepenseNiveau3Query>>[number];
+type Revenu = Awaited<ReturnType<typeof getRevenusQuery>>[number];
+type RevenuFormulaireEtat = { mode: 'ajout' } | { mode: 'edition'; revenu: Revenu } | null;
 
 const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
   fixe: 'Fixe',
@@ -60,6 +69,15 @@ const MOIS_LIBELLES = [
   'Novembre',
   'Décembre',
 ];
+
+// Mois calendaire courant au format 'YYYY-MM' (voir src/db/schema.ts).
+// Le choix du mois courant comme mois par défaut de l'onglet Revenus (plutôt
+// que le dernier mois consulté sur l'onglet Budget) a été tranché à la
+// demande du développeur — point laissé ouvert par le ticket #34.
+function moisCourant(): string {
+  const maintenant = new Date();
+  return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -252,7 +270,7 @@ export default function EditionCompteScreen() {
           ) : null}
           {ongletsVisites.has('revenus') ? (
             <ThemedView style={onglet === 'revenus' ? undefined : styles.masqueDisplayNone}>
-              <RevenusTab />
+              <RevenusTab compteId={compteId} />
             </ThemedView>
           ) : null}
           {ongletsVisites.has('budget') ? (
@@ -968,34 +986,335 @@ function TypeDepenseNiveau3Row({
   );
 }
 
-// Onglet placeholder : la lecture/l'écriture des revenus est le scope du
-// ticket #12 ("Ajout d'un revenu sur un mois donné"). Cet onglet pose
-// seulement le point d'entrée (voir ticket #34).
-function RevenusTab() {
-  const [formulaireDemande, setFormulaireDemande] = useState(false);
+// Onglet Revenus (ticket #12) : liste, ajout, modification et suppression
+// des revenus du compte, pour un mois navigable (mois calendaire, mois
+// courant par défaut — voir moisCourant() ci-dessus). Plusieurs revenus sont
+// possibles pour un même mois (voir ticket #34). Navigation mois par mois
+// indépendante de l'onglet Budget (pas d'état de mois partagé entre les
+// deux onglets, voir #34).
+//
+// Modifier/Supprimer sur chaque ligne : bouton « ⋮ » ouvrant un menu à 2
+// actions (option C validée par le développeur parmi 3 propositions
+// graphiques — voir ticket #26 pour en généraliser le style aux autres
+// listes de l'app). Modifier affiche le formulaire pré-rempli sous le
+// tableau (même emplacement que l'ajout) ; Supprimer ouvre une popup de
+// confirmation dédiée.
+function RevenusTab({ compteId }: { compteId: number }) {
+  const [mois, setMois] = useState(() => moisCourant());
+  const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
+  const [formulaire, setFormulaire] = useState<RevenuFormulaireEtat>(null);
+  const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
+  const [annee, moisIndex] = mois.split('-').map(Number);
+
+  // Si le revenu en cours de modification a été supprimé entre-temps (ex.
+  // depuis le menu ⋮ de sa propre ligne pendant que le formulaire était
+  // ouvert), on ne le considère plus ouvert : évite de soumettre une
+  // modification sur un id devenu inexistant (même défense que
+  // `selectedNiveau2Id` dans AjoutTypeNiveau3Form ci-dessus).
+  const formulaireAffiche: RevenuFormulaireEtat =
+    formulaire?.mode === 'edition' && !revenusDuMois.some((r) => r.id === formulaire.revenu.id)
+      ? null
+      : formulaire;
+
+  // Changer de mois ferme le formulaire ouvert : un ajout/une modification
+  // en cours ne doit pas se retrouver silencieusement rattaché(e) à un
+  // autre mois que celui affiché à l'écran au moment de l'ouverture.
+  const changerMois = (delta: number) => {
+    setFormulaire(null);
+    setMois((valeur) => decalerMois(valeur, delta));
+  };
 
   return (
     <ThemedView style={styles.section}>
       <ThemedText type="smallBold">Revenus</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Aucun revenu pour l’instant.
-      </ThemedText>
+
+      <ThemedView style={styles.anneeSelectorRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mois précédent"
+          onPress={() => changerMois(-1)}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ‹
+          </ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold">
+          {MOIS_LIBELLES[moisIndex - 1]} {annee}
+        </ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mois suivant"
+          onPress={() => changerMois(1)}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ›
+          </ThemedText>
+        </Pressable>
+      </ThemedView>
+
+      {revenusDuMois.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Aucun revenu pour l’instant.
+        </ThemedText>
+      ) : (
+        <ThemedView style={styles.typesList}>
+          {revenusDuMois.map((revenu) => (
+            <RevenuRow
+              key={revenu.id}
+              revenu={revenu}
+              onModifier={() => setFormulaire({ mode: 'edition', revenu })}
+            />
+          ))}
+        </ThemedView>
+      )}
+
+      <ThemedView style={styles.totalRow}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Total
+        </ThemedText>
+        <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
+      </ThemedView>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Ajouter un revenu"
-        onPress={() => setFormulaireDemande(true)}
+        accessibilityLabel={formulaireAffiche ? 'Fermer le formulaire' : 'Ajouter un revenu'}
+        onPress={() => setFormulaire(formulaireAffiche ? null : { mode: 'ajout' })}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">+ Ajouter un revenu</ThemedText>
+          <ThemedText type="smallBold">
+            {formulaireAffiche ? 'Fermer' : '+ Ajouter un revenu'}
+          </ThemedText>
         </ThemedView>
       </Pressable>
 
-      {formulaireDemande ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Formulaire d’ajout à venir (ticket #12).
+      {/* En ajout, le formulaire reste ouvert après un enregistrement réussi
+          (juste vidé) pour enchaîner plusieurs revenus du mois sans le
+          rouvrir à chaque fois. En modification, il se referme après un
+          enregistrement réussi (une ligne à la fois, comme les formulaires
+          d'édition niveau 2/3 de l'onglet Dépenses). */}
+      {formulaireAffiche ? (
+        <RevenuForm
+          key={formulaireAffiche.mode === 'edition' ? formulaireAffiche.revenu.id : 'ajout'}
+          compteId={compteId}
+          mois={mois}
+          revenuExistant={formulaireAffiche.mode === 'edition' ? formulaireAffiche.revenu : null}
+          onModificationEnregistree={() => setFormulaire(null)}
+        />
+      ) : null}
+    </ThemedView>
+  );
+}
+
+function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => void }) {
+  const [suppression, setSuppression] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  // Même garde-fou que RevenuForm : évite un setState après démontage si la
+  // ligne disparaît (ex. changement de mois) pendant la suppression.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
+
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteRevenu(revenu.id);
+    } catch {
+      if (monte.current) {
+        setErreur('La suppression a échoué, réessayez.');
+        setSuppression(false);
+      }
+    }
+  };
+
+  const confirmerSuppression = () => {
+    Alert.alert('Supprimer ce revenu ?', `« ${revenu.libelle} » sera définitivement supprimé.`, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
+    ]);
+  };
+
+  const ouvrirActions = () => {
+    Alert.alert(revenu.libelle, formatCentimesEnEuros(revenu.montant), [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Modifier', onPress: onModifier },
+      { text: 'Supprimer', style: 'destructive', onPress: confirmerSuppression },
+    ]);
+  };
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.revenuCard}>
+      <ThemedView style={styles.revenuCardRow}>
+        <ThemedText type="small">{revenu.libelle}</ThemedText>
+        <ThemedView style={styles.revenuCardRight}>
+          <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Actions pour le revenu ${revenu.libelle}`}
+            disabled={suppression}
+            hitSlop={Spacing.two}
+            onPress={ouvrirActions}
+          >
+            <ThemedText type="title" style={styles.kebabGlyph}>
+              ⋮
+            </ThemedText>
+          </Pressable>
+        </ThemedView>
+      </ThemedView>
+
+      {erreur ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreur}
         </ThemedText>
       ) : null}
+    </ThemedView>
+  );
+}
+
+// Formulaire partagé ajout/modification d'un revenu, affiché sous le
+// tableau des revenus. `revenuExistant` distingue les deux modes : en
+// modification, les champs sont pré-remplis et l'enregistrement referme le
+// formulaire ; en ajout, il reste ouvert et vidé pour enchaîner plusieurs
+// revenus (voir commentaire de RevenusTab).
+function RevenuForm({
+  compteId,
+  mois,
+  revenuExistant,
+  onModificationEnregistree,
+}: {
+  compteId: number;
+  mois: string;
+  revenuExistant: Revenu | null;
+  onModificationEnregistree: () => void;
+}) {
+  const theme = useTheme();
+  const [libelle, setLibelle] = useState(revenuExistant?.libelle ?? '');
+  const [montant, setMontant] = useState(
+    revenuExistant ? centimesEnSaisie(revenuExistant.montant) : '',
+  );
+  const [errors, setErrors] = useState<RevenuFormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  // Le bouton qui referme ce formulaire (dans RevenusTab) reste actif
+  // pendant l'enregistrement : ce ref évite d'appeler setState après un
+  // démontage si l'utilisateur ferme le formulaire pendant l'await.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
+  // Verrou synchrone (contrairement à `enregistrement`, un state React dont
+  // la mise à jour n'est pas immédiatement reflétée par `disabled`) : évite
+  // qu'un double-tap rapide sur le bouton déclenche handleValider deux fois
+  // avant le premier re-render, et crée un revenu en double.
+  const enCours = useRef(false);
+
+  const handleValider = async () => {
+    const erreursValidation = validateRevenuForm({ libelle, montant });
+    setErrors(erreursValidation);
+
+    const montantEnCentimes = parseMontantEnCentimes(montant);
+    if (
+      Object.keys(erreursValidation).length > 0 ||
+      montantEnCentimes === null ||
+      enCours.current
+    ) {
+      return;
+    }
+
+    enCours.current = true;
+    setErreurEnregistrement(null);
+    setEnregistrement(true);
+    try {
+      if (revenuExistant) {
+        await updateRevenu(revenuExistant.id, libelle.trim(), montantEnCentimes);
+        if (monte.current) {
+          onModificationEnregistree();
+        }
+      } else {
+        await createRevenu(compteId, mois, libelle.trim(), montantEnCentimes);
+        if (monte.current) {
+          setLibelle('');
+          setMontant('');
+        }
+      }
+    } catch {
+      if (monte.current) {
+        setErreurEnregistrement(
+          revenuExistant ? 'La modification a échoué, réessayez.' : 'L’ajout a échoué, réessayez.',
+        );
+      }
+    } finally {
+      enCours.current = false;
+      if (monte.current) {
+        setEnregistrement(false);
+      }
+    }
+  };
+
+  return (
+    <ThemedView style={styles.ajoutForm}>
+      <TextInput
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Salaire"
+        placeholderTextColor={theme.textSecondary}
+        accessibilityLabel="Libellé du revenu"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.libelle ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.libelle}
+        </ThemedText>
+      ) : null}
+
+      <TextInput
+        value={montant}
+        onChangeText={setMontant}
+        placeholder="Ex. 1500"
+        placeholderTextColor={theme.textSecondary}
+        keyboardType="decimal-pad"
+        accessibilityLabel="Montant du revenu"
+        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+      />
+      {errors.montant ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {errors.montant}
+        </ThemedText>
+      ) : null}
+
+      {erreurEnregistrement ? (
+        <ThemedText type="small" style={styles.errorText}>
+          {erreurEnregistrement}
+        </ThemedText>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          revenuExistant ? 'Enregistrer la modification du revenu' : 'Valider l’ajout du revenu'
+        }
+        disabled={enregistrement}
+        onPress={handleValider}
+      >
+        <ThemedView type="backgroundElement" style={styles.submitButton}>
+          <ThemedText type="smallBold">
+            {enregistrement
+              ? revenuExistant
+                ? 'Enregistrement…'
+                : 'Ajout…'
+              : revenuExistant
+                ? 'Enregistrer'
+                : 'Ajouter'}
+          </ThemedText>
+        </ThemedView>
+      </Pressable>
     </ThemedView>
   );
 }
@@ -1205,5 +1524,25 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  revenuCard: {
+    gap: Spacing.one,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  revenuCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  revenuCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  kebabGlyph: {
+    fontSize: 20,
+    lineHeight: 20,
   },
 });
