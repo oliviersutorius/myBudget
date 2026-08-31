@@ -1006,6 +1006,16 @@ function RevenusTab({ compteId }: { compteId: number }) {
   const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
   const [annee, moisIndex] = mois.split('-').map(Number);
 
+  // Si le revenu en cours de modification a été supprimé entre-temps (ex.
+  // depuis le menu ⋮ de sa propre ligne pendant que le formulaire était
+  // ouvert), on ne le considère plus ouvert : évite de soumettre une
+  // modification sur un id devenu inexistant (même défense que
+  // `selectedNiveau2Id` dans AjoutTypeNiveau3Form ci-dessus).
+  const formulaireAffiche: RevenuFormulaireEtat =
+    formulaire?.mode === 'edition' && !revenusDuMois.some((r) => r.id === formulaire.revenu.id)
+      ? null
+      : formulaire;
+
   // Changer de mois ferme le formulaire ouvert : un ajout/une modification
   // en cours ne doit pas se retrouver silencieusement rattaché(e) à un
   // autre mois que celui affiché à l'écran au moment de l'ouverture.
@@ -1067,11 +1077,13 @@ function RevenusTab({ compteId }: { compteId: number }) {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={formulaire ? 'Fermer le formulaire' : 'Ajouter un revenu'}
-        onPress={() => setFormulaire((valeur) => (valeur ? null : { mode: 'ajout' }))}
+        accessibilityLabel={formulaireAffiche ? 'Fermer le formulaire' : 'Ajouter un revenu'}
+        onPress={() => setFormulaire(formulaireAffiche ? null : { mode: 'ajout' })}
       >
         <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">{formulaire ? 'Fermer' : '+ Ajouter un revenu'}</ThemedText>
+          <ThemedText type="smallBold">
+            {formulaireAffiche ? 'Fermer' : '+ Ajouter un revenu'}
+          </ThemedText>
         </ThemedView>
       </Pressable>
 
@@ -1080,12 +1092,12 @@ function RevenusTab({ compteId }: { compteId: number }) {
           rouvrir à chaque fois. En modification, il se referme après un
           enregistrement réussi (une ligne à la fois, comme les formulaires
           d'édition niveau 2/3 de l'onglet Dépenses). */}
-      {formulaire ? (
+      {formulaireAffiche ? (
         <RevenuForm
-          key={formulaire.mode === 'edition' ? formulaire.revenu.id : 'ajout'}
+          key={formulaireAffiche.mode === 'edition' ? formulaireAffiche.revenu.id : 'ajout'}
           compteId={compteId}
           mois={mois}
-          revenuExistant={formulaire.mode === 'edition' ? formulaire.revenu : null}
+          revenuExistant={formulaireAffiche.mode === 'edition' ? formulaireAffiche.revenu : null}
           onModificationEnregistree={() => setFormulaire(null)}
         />
       ) : null}
@@ -1096,6 +1108,15 @@ function RevenusTab({ compteId }: { compteId: number }) {
 function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => void }) {
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Même garde-fou que RevenuForm : évite un setState après démontage si la
+  // ligne disparaît (ex. changement de mois) pendant la suppression.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
 
   const supprimer = async () => {
     setErreur(null);
@@ -1103,8 +1124,10 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
     try {
       await deleteRevenu(revenu.id);
     } catch {
-      setErreur('La suppression a échoué, réessayez.');
-      setSuppression(false);
+      if (monte.current) {
+        setErreur('La suppression a échoué, réessayez.');
+        setSuppression(false);
+      }
     }
   };
 
@@ -1186,16 +1209,26 @@ function RevenuForm({
     },
     [],
   );
+  // Verrou synchrone (contrairement à `enregistrement`, un state React dont
+  // la mise à jour n'est pas immédiatement reflétée par `disabled`) : évite
+  // qu'un double-tap rapide sur le bouton déclenche handleValider deux fois
+  // avant le premier re-render, et crée un revenu en double.
+  const enCours = useRef(false);
 
   const handleValider = async () => {
     const erreursValidation = validateRevenuForm({ libelle, montant });
     setErrors(erreursValidation);
 
     const montantEnCentimes = parseMontantEnCentimes(montant);
-    if (Object.keys(erreursValidation).length > 0 || montantEnCentimes === null) {
+    if (
+      Object.keys(erreursValidation).length > 0 ||
+      montantEnCentimes === null ||
+      enCours.current
+    ) {
       return;
     }
 
+    enCours.current = true;
     setErreurEnregistrement(null);
     setEnregistrement(true);
     try {
@@ -1218,6 +1251,7 @@ function RevenuForm({
         );
       }
     } finally {
+      enCours.current = false;
       if (monte.current) {
         setEnregistrement(false);
       }
