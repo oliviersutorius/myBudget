@@ -33,4 +33,46 @@ describe('validateTypeDepenseNiveau3Form', () => {
       niveau2Id: 'Choisissez un type de dépense niveau 2.',
     });
   });
+
+  it('ignore le montant quand il est absent (création, sans champ montant)', () => {
+    expect(validateTypeDepenseNiveau3Form({ libelle: 'Crédit immobilier', niveau2Id: 1 })).toEqual(
+      {},
+    );
+  });
+
+  it('accepte un montant vide (édition sans changement de montant)', () => {
+    expect(
+      validateTypeDepenseNiveau3Form({ libelle: 'Crédit immobilier', niveau2Id: 1, montant: '' }),
+    ).toEqual({});
+  });
+
+  it('accepte un montant positif valide', () => {
+    expect(
+      validateTypeDepenseNiveau3Form({
+        libelle: 'Crédit immobilier',
+        niveau2Id: 1,
+        montant: '850,50',
+      }),
+    ).toEqual({});
+  });
+
+  it('signale un montant non numérique', () => {
+    expect(
+      validateTypeDepenseNiveau3Form({
+        libelle: 'Crédit immobilier',
+        niveau2Id: 1,
+        montant: 'abc',
+      }),
+    ).toEqual({
+      montant: 'Le montant doit être un nombre positif.',
+    });
+  });
+
+  it('signale un montant nul ou négatif', () => {
+    expect(
+      validateTypeDepenseNiveau3Form({ libelle: 'Crédit immobilier', niveau2Id: 1, montant: '0' }),
+    ).toEqual({
+      montant: 'Le montant doit être un nombre positif.',
+    });
+  });
 });
