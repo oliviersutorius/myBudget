@@ -30,6 +30,7 @@ import {
   type TypeDepenseNiveau3FormErrors,
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
+import { decalerMois } from '@/utils/mois';
 import { formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
 type Niveau1 = 'fixe' | 'variable';
@@ -981,11 +982,13 @@ function TypeDepenseNiveau3Row({
   );
 }
 
-// Onglet Revenus (ticket #12) : liste et ajout des revenus du compte pour le
-// mois courant (mois calendaire, voir moisCourant() ci-dessus). Plusieurs
-// revenus sont possibles pour un même mois (voir ticket #34).
+// Onglet Revenus (ticket #12) : liste et ajout des revenus du compte, pour
+// un mois navigable (mois calendaire, mois courant par défaut — voir
+// moisCourant() ci-dessus). Plusieurs revenus sont possibles pour un même
+// mois (voir ticket #34). Navigation mois par mois indépendante de l'onglet
+// Budget (pas d'état de mois partagé entre les deux onglets, voir #34).
 function RevenusTab({ compteId }: { compteId: number }) {
-  const [mois] = useState(() => moisCourant());
+  const [mois, setMois] = useState(() => moisCourant());
   const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
@@ -993,9 +996,31 @@ function RevenusTab({ compteId }: { compteId: number }) {
 
   return (
     <ThemedView style={styles.section}>
-      <ThemedText type="smallBold">
-        Revenus — {MOIS_LIBELLES[moisIndex - 1]} {annee}
-      </ThemedText>
+      <ThemedText type="smallBold">Revenus</ThemedText>
+
+      <ThemedView style={styles.anneeSelectorRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mois précédent"
+          onPress={() => setMois((valeur) => decalerMois(valeur, -1))}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ‹
+          </ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold">
+          {MOIS_LIBELLES[moisIndex - 1]} {annee}
+        </ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mois suivant"
+          onPress={() => setMois((valeur) => decalerMois(valeur, 1))}
+        >
+          <ThemedText type="title" style={styles.anneeChevron}>
+            ›
+          </ThemedText>
+        </Pressable>
+      </ThemedView>
 
       {revenusDuMois.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
