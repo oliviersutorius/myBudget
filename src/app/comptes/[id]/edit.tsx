@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,9 +14,12 @@ import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-nivea
 import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
+import { getMontantsHistoriqueCompteQuery } from '@/db/queries/get-montants-historique-compte';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
+import { resolveMontantsNiveau3Compte } from '@/db/queries/resolve-montants-niveau3-compte';
+import { setMontantDepenseNiveau3 } from '@/db/queries/set-montant-depense-niveau3';
 import { updateCompte } from '@/db/queries/update-compte';
 import { updateRevenu } from '@/db/queries/update-revenu';
 import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
@@ -42,6 +45,10 @@ type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>
 type TypeDepenseNiveau3 = Awaited<ReturnType<typeof getTypesDepenseNiveau3Query>>[number];
 type Revenu = Awaited<ReturnType<typeof getRevenusQuery>>[number];
 type RevenuFormulaireEtat = { mode: 'ajout' } | { mode: 'edition'; revenu: Revenu } | null;
+// Montant résolu (mois courant) par type de dépense niveau 3 — voir
+// resolveMontantsNiveau3Compte. `undefined` (clé absente) et `null`
+// (dépense absente ce mois) se traitent de façon identique à l'affichage.
+type MontantsParType3 = Map<number, number | null>;
 
 const LIBELLE_NIVEAU1: Record<Niveau1, string> = {
   fixe: 'Fixe',
@@ -415,20 +422,54 @@ function LigneActionsEdition({
 
 function DepensesTab({ compteId }: { compteId: number }) {
   const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
+  // Une seule requête pour tout l'historique de montants du compte (ticket
+  // #9) plutôt qu'une par ligne niveau 3 : résolue et agrégée ci-dessous,
+  // puis distribuée aux lignes via montantsParType3 (voir
+  // resolveMontantsNiveau3Compte).
+  const { data: historiqueCompte } = useLiveQuery(getMontantsHistoriqueCompteQuery(compteId), [
+    compteId,
+  ]);
+  const mois = moisCourant();
+  const { montantsParType3, sommeParNiveau2 } = useMemo(
+    () => resolveMontantsNiveau3Compte(historiqueCompte, mois),
+    [historiqueCompte, mois],
+  );
   const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
   const typesVariable = types.filter((type) => type.niveau1 === 'variable');
+  const sommeNiveau1 = (typesDuNiveau1: TypeDepenseNiveau2[]) =>
+    typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
 
   return (
     <ThemedView style={styles.section}>
-      <Niveau1Table titre="Fixe" types={typesFixe} />
-      <Niveau1Table titre="Variable" types={typesVariable} />
+      <Niveau1Table
+        titre="Fixe"
+        types={typesFixe}
+        total={sommeNiveau1(typesFixe)}
+        montantsParType3={montantsParType3}
+      />
+      <Niveau1Table
+        titre="Variable"
+        types={typesVariable}
+        total={sommeNiveau1(typesVariable)}
+        montantsParType3={montantsParType3}
+      />
       <AjoutTypeNiveau2Form compteId={compteId} />
       <AjoutTypeNiveau3Form typesNiveau2={types} />
     </ThemedView>
   );
 }
 
-function Niveau1Table({ titre, types }: { titre: string; types: TypeDepenseNiveau2[] }) {
+function Niveau1Table({
+  titre,
+  types,
+  total,
+  montantsParType3,
+}: {
+  titre: string;
+  types: TypeDepenseNiveau2[];
+  total: number;
+  montantsParType3: MontantsParType3;
+}) {
   return (
     <ThemedView style={styles.niveau1Table}>
       <ThemedText type="smallBold">{titre}</ThemedText>
@@ -440,7 +481,7 @@ function Niveau1Table({ titre, types }: { titre: string; types: TypeDepenseNivea
       ) : (
         <ThemedView style={styles.typesList}>
           {types.map((type) => (
-            <Niveau2RowCollapsible key={type.id} item={type} />
+            <Niveau2RowCollapsible key={type.id} item={type} montantsParType3={montantsParType3} />
           ))}
         </ThemedView>
       )}
@@ -449,10 +490,7 @@ function Niveau1Table({ titre, types }: { titre: string; types: TypeDepenseNivea
         <ThemedText type="small" themeColor="textSecondary">
           Total {titre}
         </ThemedText>
-        {/* La somme des montants dépend de la saisie du montant niveau 3 (ticket #9). */}
-        <ThemedText type="small" themeColor="textSecondary">
-          — (ticket #9)
-        </ThemedText>
+        <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
       </ThemedView>
     </ThemedView>
   );
@@ -644,7 +682,13 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
   );
 }
 
-function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
+function Niveau2RowCollapsible({
+  item,
+  montantsParType3,
+}: {
+  item: TypeDepenseNiveau2;
+  montantsParType3: MontantsParType3;
+}) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
   // Une fois dépliée au moins une fois, la liste niveau 3 reste montée (juste
@@ -797,7 +841,12 @@ function Niveau2RowCollapsible({ item }: { item: TypeDepenseNiveau2 }) {
       )}
 
       {aEteOuvert ? (
-        <Niveau3Liste niveau2Id={item.id} niveau1Parent={item.niveau1} masque={!ouvert} />
+        <Niveau3Liste
+          niveau2Id={item.id}
+          niveau1Parent={item.niveau1}
+          masque={!ouvert}
+          montantsParType3={montantsParType3}
+        />
       ) : null}
     </>
   );
@@ -807,12 +856,18 @@ function Niveau3Liste({
   niveau2Id,
   niveau1Parent,
   masque,
+  montantsParType3,
 }: {
   niveau2Id: number;
   niveau1Parent: Niveau1;
   masque: boolean;
+  montantsParType3: MontantsParType3;
 }) {
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
+  const total = sousTypes.reduce(
+    (somme, sousType) => somme + (montantsParType3.get(sousType.id) ?? 0),
+    0,
+  );
 
   return (
     <ThemedView style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}>
@@ -828,6 +883,7 @@ function Niveau3Liste({
                 key={sousType.id}
                 item={sousType}
                 niveau1Parent={niveau1Parent}
+                montant={montantsParType3.get(sousType.id) ?? null}
               />
             ))}
           </ThemedView>
@@ -836,10 +892,7 @@ function Niveau3Liste({
             <ThemedText type="small" themeColor="textSecondary">
               Total
             </ThemedText>
-            {/* La somme dépend de la saisie du montant niveau 3 (ticket #9). */}
-            <ThemedText type="small" themeColor="textSecondary">
-              — (ticket #9)
-            </ThemedText>
+            <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
           </ThemedView>
         </>
       )}
@@ -850,13 +903,19 @@ function Niveau3Liste({
 function TypeDepenseNiveau3Row({
   item,
   niveau1Parent,
+  montant,
 }: {
   item: TypeDepenseNiveau3;
   niveau1Parent: Niveau1;
+  /** Montant résolu au mois courant (voir DepensesTab), `null` = absente ce mois. */
+  montant: number | null;
 }) {
   const theme = useTheme();
   const [edition, setEdition] = useState(false);
   const [libelle, setLibelle] = useState(item.libelle);
+  const [montantSaisie, setMontantSaisie] = useState(
+    montant !== null ? centimesEnSaisie(montant) : '',
+  );
   const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
@@ -865,6 +924,7 @@ function TypeDepenseNiveau3Row({
 
   const handleAnnuler = () => {
     setLibelle(item.libelle);
+    setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
     setErrors({});
     setErreur(null);
     setEdition(false);
@@ -874,6 +934,7 @@ function TypeDepenseNiveau3Row({
     const erreursValidation = validateTypeDepenseNiveau3Form({
       libelle,
       niveau2Id: item.niveau2Id,
+      montant: montantSaisie,
     });
     setErrors(erreursValidation);
 
@@ -885,9 +946,36 @@ function TypeDepenseNiveau3Row({
     setEnregistrement(true);
     try {
       await updateTypeDepenseNiveau3(item.id, libelle.trim());
+
+      // Un champ montant vide signifie « pas de changement de montant » (la
+      // validation ci-dessus l'accepte) — ce n'est pas ainsi qu'on marque
+      // une dépense absente, voir « Marquer absente » plus bas. Une saisie
+      // identique au montant déjà résolu n'est pas non plus réécrite : pas
+      // de duplication en base pour un mois sans changement (voir #9).
+      const montantSaisieTrim = montantSaisie.trim();
+      if (montantSaisieTrim.length > 0) {
+        const montantEnCentimes = parseMontantEnCentimes(montantSaisieTrim);
+        if (montantEnCentimes !== null && montantEnCentimes !== montant) {
+          await setMontantDepenseNiveau3(item.id, moisCourant(), montantEnCentimes);
+        }
+      }
+
       setEdition(false);
     } catch {
       setErreur('La sauvegarde a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  const marquerAbsente = async () => {
+    setErreur(null);
+    setEnregistrement(true);
+    try {
+      await setMontantDepenseNiveau3(item.id, moisCourant(), null);
+      setMontantSaisie('');
+    } catch {
+      setErreur('L’action a échoué, réessayez.');
     } finally {
       setEnregistrement(false);
     }
@@ -899,11 +987,10 @@ function TypeDepenseNiveau3Row({
     try {
       await deleteTypeDepenseNiveau3(item.id);
     } catch (error) {
-      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : dès que le
-      // ticket #9 insère des montants historisés, la suppression échouera
-      // tant que des montants dépendent encore de cette ligne (voir
-      // delete-type-depense-niveau3.ts). Pas la peine de laisser croire
-      // qu'un simple réessai suffira.
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : la
+      // suppression échoue tant que des montants historisés dépendent
+      // encore de cette ligne (voir delete-type-depense-niveau3.ts). Pas la
+      // peine de laisser croire qu'un simple réessai suffira.
       const bloqueParDesEnfants =
         error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
       setErreur(
@@ -937,6 +1024,21 @@ function TypeDepenseNiveau3Row({
           </ThemedText>
         ) : null}
 
+        <TextInput
+          value={montantSaisie}
+          onChangeText={setMontantSaisie}
+          placeholder="Ex. 1500"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="decimal-pad"
+          accessibilityLabel={`Montant de la ligne ${libelleAccessible}`}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
+        />
+        {errors.montant ? (
+          <ThemedText type="small" style={styles.errorText}>
+            {errors.montant}
+          </ThemedText>
+        ) : null}
+
         {erreur ? (
           <ThemedText type="small" style={styles.errorText}>
             {erreur}
@@ -963,10 +1065,13 @@ function TypeDepenseNiveau3Row({
             {LIBELLE_NIVEAU1[niveau1Parent]} (hérité)
           </ThemedText>
         </ThemedView>
-        {/* Le montant dépend de la saisie/historisation niveau 3 (ticket #9). */}
-        <ThemedText type="small" themeColor="textSecondary">
-          — (ticket #9)
-        </ThemedText>
+        {montant === null ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Absente ce mois
+          </ThemedText>
+        ) : (
+          <ThemedText type="small">{formatCentimesEnEuros(montant)}</ThemedText>
+        )}
       </ThemedView>
 
       {erreur ? (
@@ -975,13 +1080,33 @@ function TypeDepenseNiveau3Row({
         </ThemedText>
       ) : null}
 
-      <LigneActionsAffichage
-        labelModifier={`Modifier la ligne ${libelleAccessible}`}
-        labelSupprimer={`Supprimer la ligne ${libelleAccessible}`}
-        suppression={suppression}
-        onModifier={() => setEdition(true)}
-        onSupprimer={handleSupprimer}
-      />
+      <ThemedView style={styles.typeRowActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Modifier la ligne ${libelleAccessible}`}
+          onPress={() => setEdition(true)}
+        >
+          <ThemedText type="link">Modifier</ThemedText>
+        </Pressable>
+        {montant !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Marquer la ligne ${libelleAccessible} absente ce mois`}
+            disabled={enregistrement}
+            onPress={marquerAbsente}
+          >
+            <ThemedText type="link">Marquer absente</ThemedText>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Supprimer la ligne ${libelleAccessible}`}
+          disabled={suppression}
+          onPress={handleSupprimer}
+        >
+          <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
+        </Pressable>
+      </ThemedView>
     </ThemedView>
   );
 }
