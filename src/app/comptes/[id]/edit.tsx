@@ -446,12 +446,14 @@ function DepensesTab({ compteId }: { compteId: number }) {
         types={typesFixe}
         total={sommeNiveau1(typesFixe)}
         montantsParType3={montantsParType3}
+        sommeParNiveau2={sommeParNiveau2}
       />
       <Niveau1Table
         titre="Variable"
         types={typesVariable}
         total={sommeNiveau1(typesVariable)}
         montantsParType3={montantsParType3}
+        sommeParNiveau2={sommeParNiveau2}
       />
       <AjoutTypeNiveau2Form compteId={compteId} />
       <AjoutTypeNiveau3Form typesNiveau2={types} />
@@ -464,11 +466,13 @@ function Niveau1Table({
   types,
   total,
   montantsParType3,
+  sommeParNiveau2,
 }: {
   titre: string;
   types: TypeDepenseNiveau2[];
   total: number;
   montantsParType3: MontantsParType3;
+  sommeParNiveau2: Map<number, number>;
 }) {
   return (
     <ThemedView style={styles.niveau1Table}>
@@ -481,7 +485,12 @@ function Niveau1Table({
       ) : (
         <ThemedView style={styles.typesList}>
           {types.map((type) => (
-            <Niveau2RowCollapsible key={type.id} item={type} montantsParType3={montantsParType3} />
+            <Niveau2RowCollapsible
+              key={type.id}
+              item={type}
+              montantsParType3={montantsParType3}
+              sommeParNiveau2={sommeParNiveau2}
+            />
           ))}
         </ThemedView>
       )}
@@ -685,9 +694,11 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
 function Niveau2RowCollapsible({
   item,
   montantsParType3,
+  sommeParNiveau2,
 }: {
   item: TypeDepenseNiveau2;
   montantsParType3: MontantsParType3;
+  sommeParNiveau2: Map<number, number>;
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
@@ -846,6 +857,7 @@ function Niveau2RowCollapsible({
           niveau1Parent={item.niveau1}
           masque={!ouvert}
           montantsParType3={montantsParType3}
+          total={sommeParNiveau2.get(item.id) ?? 0}
         />
       ) : null}
     </>
@@ -857,17 +869,16 @@ function Niveau3Liste({
   niveau1Parent,
   masque,
   montantsParType3,
+  total,
 }: {
   niveau2Id: number;
   niveau1Parent: Niveau1;
   masque: boolean;
   montantsParType3: MontantsParType3;
+  /** Somme des montants résolus des lignes de ce niveau 2 (voir DepensesTab). */
+  total: number;
 }) {
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
-  const total = sousTypes.reduce(
-    (somme, sousType) => somme + (montantsParType3.get(sousType.id) ?? 0),
-    0,
-  );
 
   return (
     <ThemedView style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}>
@@ -913,14 +924,22 @@ function TypeDepenseNiveau3Row({
   const theme = useTheme();
   const [edition, setEdition] = useState(false);
   const [libelle, setLibelle] = useState(item.libelle);
-  const [montantSaisie, setMontantSaisie] = useState(
-    montant !== null ? centimesEnSaisie(montant) : '',
-  );
+  const [montantSaisie, setMontantSaisie] = useState('');
   const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const libelleAccessible = `${item.libelle} (#${item.id})`;
+  // Garde-fou anti-unmount (même pattern que RevenuRow/RevenuForm) : évite
+  // un setState après démontage si la ligne disparaît (suppression) pendant
+  // qu'un enregistrement de montant est encore en cours.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
 
   const handleAnnuler = () => {
     setLibelle(item.libelle);
@@ -960,11 +979,17 @@ function TypeDepenseNiveau3Row({
         }
       }
 
-      setEdition(false);
+      if (monte.current) {
+        setEdition(false);
+      }
     } catch {
-      setErreur('La sauvegarde a échoué, réessayez.');
+      if (monte.current) {
+        setErreur('La sauvegarde a échoué, réessayez.');
+      }
     } finally {
-      setEnregistrement(false);
+      if (monte.current) {
+        setEnregistrement(false);
+      }
     }
   };
 
@@ -973,11 +998,17 @@ function TypeDepenseNiveau3Row({
     setEnregistrement(true);
     try {
       await setMontantDepenseNiveau3(item.id, moisCourant(), null);
-      setMontantSaisie('');
+      if (monte.current) {
+        setMontantSaisie('');
+      }
     } catch {
-      setErreur('L’action a échoué, réessayez.');
+      if (monte.current) {
+        setErreur('L’action a échoué, réessayez.');
+      }
     } finally {
-      setEnregistrement(false);
+      if (monte.current) {
+        setEnregistrement(false);
+      }
     }
   };
 
@@ -1084,7 +1115,15 @@ function TypeDepenseNiveau3Row({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Modifier la ligne ${libelleAccessible}`}
-          onPress={() => setEdition(true)}
+          disabled={suppression}
+          onPress={() => {
+            // Initialisé ici plutôt qu'au montage : `montant` provient d'une
+            // requête compte-wide (DepensesTab) qui peut ne pas avoir encore
+            // résolu quand cette ligne apparaît — on lit sa valeur la plus
+            // récente au moment où l'utilisateur ouvre effectivement l'édition.
+            setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
+            setEdition(true);
+          }}
         >
           <ThemedText type="link">Modifier</ThemedText>
         </Pressable>
@@ -1092,7 +1131,7 @@ function TypeDepenseNiveau3Row({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Marquer la ligne ${libelleAccessible} absente ce mois`}
-            disabled={enregistrement}
+            disabled={enregistrement || suppression}
             onPress={marquerAbsente}
           >
             <ThemedText type="link">Marquer absente</ThemedText>
@@ -1101,7 +1140,7 @@ function TypeDepenseNiveau3Row({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Supprimer la ligne ${libelleAccessible}`}
-          disabled={suppression}
+          disabled={suppression || enregistrement}
           onPress={handleSupprimer}
         >
           <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
