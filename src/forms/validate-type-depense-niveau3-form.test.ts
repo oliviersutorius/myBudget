@@ -75,4 +75,56 @@ describe('validateTypeDepenseNiveau3Form', () => {
       montant: 'Le montant doit être un nombre positif.',
     });
   });
+
+  // montantRequis: true (ticket #41) : la popup d'ajout niveau 3 collecte le
+  // montant dès la création (contrairement à l'édition, où un champ vide
+  // signifie « pas de changement » — voir les tests ci-dessus, inchangés).
+  describe('avec montantRequis: true (popup d’ajout)', () => {
+    it('signale un montant absent', () => {
+      expect(
+        validateTypeDepenseNiveau3Form({ libelle: 'Crédit immobilier', niveau2Id: 1 }, true),
+      ).toEqual({
+        montant: 'Le montant est obligatoire.',
+      });
+    });
+
+    it('signale un montant vide', () => {
+      expect(
+        validateTypeDepenseNiveau3Form(
+          { libelle: 'Crédit immobilier', niveau2Id: 1, montant: '' },
+          true,
+        ),
+      ).toEqual({
+        montant: 'Le montant est obligatoire.',
+      });
+    });
+
+    it('signale un montant non numérique', () => {
+      expect(
+        validateTypeDepenseNiveau3Form(
+          { libelle: 'Crédit immobilier', niveau2Id: 1, montant: 'abc' },
+          true,
+        ),
+      ).toEqual({
+        montant: 'Le montant doit être un nombre positif.',
+      });
+    });
+
+    it('accepte un montant positif valide', () => {
+      expect(
+        validateTypeDepenseNiveau3Form(
+          { libelle: 'Crédit immobilier', niveau2Id: 1, montant: '850,50' },
+          true,
+        ),
+      ).toEqual({});
+    });
+
+    it('cumule l’erreur de montant obligatoire avec les autres erreurs', () => {
+      expect(validateTypeDepenseNiveau3Form({ libelle: '', niveau2Id: null }, true)).toEqual({
+        libelle: 'Le libellé est obligatoire.',
+        niveau2Id: 'Choisissez un type de dépense niveau 2.',
+        montant: 'Le montant est obligatoire.',
+      });
+    });
+  });
 });
