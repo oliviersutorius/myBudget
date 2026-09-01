@@ -13,6 +13,7 @@ import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
 import { deleteRevenu } from '@/db/queries/delete-revenu';
+import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
 import { getMontantsHistoriqueCompteQuery } from '@/db/queries/get-montants-historique-compte';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
@@ -22,6 +23,7 @@ import { resolveMontantsNiveau3Compte } from '@/db/queries/resolve-montants-nive
 import { setMontantDepenseNiveau3 } from '@/db/queries/set-montant-depense-niveau3';
 import { updateCompte } from '@/db/queries/update-compte';
 import { updateRevenu } from '@/db/queries/update-revenu';
+import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
 import { updateTypeDepenseNiveau3 } from '@/db/queries/update-type-depense-niveau3';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
 import { validateRevenuForm, type RevenuFormErrors } from '@/forms/validate-revenu-form';
@@ -375,6 +377,42 @@ function BarreOnglets({
   );
 }
 
+// Sélecteur Fixe/Variable réutilisé par l'édition d'un type niveau 2
+// (LigneNiveau2, ticket #41) : le choix niveau1 n'est saisi qu'à l'édition
+// (renommage/re-catégorisation d'un type existant) — à la création, il est
+// implicite au pavé depuis lequel la popup d'ajout a été ouverte (voir
+// PopupAjoutNiveau2).
+function Niveau1Selector({
+  valeur,
+  onChanger,
+  accessibilityLabelPrefix,
+}: {
+  valeur: Niveau1 | null;
+  onChanger: (niveau1: Niveau1) => void;
+  accessibilityLabelPrefix: string;
+}) {
+  return (
+    <ThemedView style={styles.niveau1Row}>
+      {(['fixe', 'variable'] as const).map((option) => (
+        <Pressable
+          key={option}
+          accessibilityRole="button"
+          accessibilityLabel={`${accessibilityLabelPrefix} — ${LIBELLE_NIVEAU1[option]}`}
+          onPress={() => onChanger(option)}
+          style={styles.niveau1ChipWrapper}
+        >
+          <ThemedView
+            type={valeur === option ? 'backgroundSelected' : 'backgroundElement'}
+            style={styles.niveau1Chip}
+          >
+            <ThemedText type="small">{LIBELLE_NIVEAU1[option]}</ThemedText>
+          </ThemedView>
+        </Pressable>
+      ))}
+    </ThemedView>
+  );
+}
+
 // Reste local à cet écran (non exporté) plutôt que déplacé dans
 // src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
 // par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
@@ -637,11 +675,16 @@ function PaveNiveau1({
 // Ligne niveau 2 (carte imbriquée dans un pavé niveau 1) : somme du couple
 // niveau1/niveau2 + bouton « + » (popup d'ajout niveau 3) en en-tête,
 // collapsable en cliquant sur le chevron/libellé pour révéler ses lignes
-// niveau 3. Plus de menu « ⋮ » ici (renommage/suppression du type niveau 2)
-// contrairement à l'ancien Niveau2RowCollapsible : la maquette A n'en laisse
-// pas la place en en-tête (chevron + libellé à gauche, somme + bouton « + »
-// à droite seulement) — voir le rapport de ce ticket pour ce point à
-// confirmer en revue avant merge.
+// niveau 3. Le menu « ⋮ » (Modifier/Supprimer, ActionsMenuButton) est
+// réintégré ici à la demande du développeur : la maquette pixel-exacte ne
+// lui laissait pas de place en en-tête, mais la spec du ticket #41 ne
+// prévoyait pas explicitement de retirer cette fonctionnalité pour le
+// niveau 2 (contrairement au niveau 1, marqué « non éditable ») — on
+// préfère donc garder ce pattern générique/cohérent avec niveau 3 et
+// Revenus plutôt que suivre la maquette au pixel près sur ce seul point.
+// « + » et « ⋮ » sont placés côte à côte à droite (voir ligneNiveau2Right) :
+// ça déborde légèrement de la largeur prévue par la maquette pour ce bloc,
+// sans casser l'alignement chevron/libellé à gauche / somme au centre-droit.
 function LigneNiveau2({
   item,
   montantsParType3,
@@ -655,7 +698,120 @@ function LigneNiveau2({
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
+  // Édition (renommage/re-catégorisation fixe/variable) et suppression du
+  // type niveau 2 lui-même : même logique que l'ancien Niveau2RowCollapsible
+  // (avant la refonte #41), simplement réintégrée dans la nouvelle carte.
+  const [edition, setEdition] = useState(false);
+  const [libelle, setLibelle] = useState(item.libelle);
+  const [niveau1, setNiveau1] = useState<Niveau1 | null>(item.niveau1);
+  const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
+  const [enregistrement, setEnregistrement] = useState(false);
+  const [suppression, setSuppression] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
   const somme = sommeParNiveau2.get(item.id) ?? 0;
+  const libelleAccessible = `${item.libelle} (#${item.id})`;
+
+  const handleAnnuler = () => {
+    setLibelle(item.libelle);
+    setNiveau1(item.niveau1);
+    setErrors({});
+    setErreur(null);
+    setEdition(false);
+  };
+
+  const handleEnregistrer = async () => {
+    const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1 });
+    setErrors(erreursValidation);
+
+    if (Object.keys(erreursValidation).length > 0 || niveau1 === null) {
+      return;
+    }
+
+    setErreur(null);
+    setEnregistrement(true);
+    try {
+      await updateTypeDepenseNiveau2(item.id, libelle.trim(), niveau1);
+      setEdition(false);
+    } catch {
+      setErreur('La sauvegarde a échoué, réessayez.');
+    } finally {
+      setEnregistrement(false);
+    }
+  };
+
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteTypeDepenseNiveau2(item.id);
+    } catch (error) {
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : la
+      // suppression échouera tant que des types niveau 3 dépendent encore
+      // de celui-ci (voir delete-type-depense-niveau2.ts). Pas la peine de
+      // laisser croire qu'un simple réessai suffira.
+      const bloqueParDesEnfants =
+        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
+      setErreur(
+        bloqueParDesEnfants
+          ? 'Suppression impossible : des dépenses sont encore rattachées à ce type.'
+          : 'La suppression a échoué, réessayez.',
+      );
+      setSuppression(false);
+    }
+  };
+
+  const handleSupprimer = () => {
+    demanderConfirmationSuppression(
+      'Supprimer ce type de dépense ?',
+      `« ${item.libelle} » sera définitivement supprimé.`,
+      supprimer,
+    );
+  };
+
+  if (edition) {
+    return (
+      <ThemedView type="background" style={styles.ligneNiveau2}>
+        <ThemedView style={styles.ligneNiveau2Edition}>
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
+
+          <Niveau1Selector
+            valeur={niveau1}
+            onChanger={setNiveau1}
+            accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+          />
+          {errors.niveau1 ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.niveau1}
+            </ThemedText>
+          ) : null}
+
+          {erreur ? (
+            <ThemedText type="small" themeColor="danger">
+              {erreur}
+            </ThemedText>
+          ) : null}
+
+          <LigneActionsEdition
+            labelAnnuler={`Annuler la modification du type de dépense ${libelleAccessible}`}
+            labelEnregistrer={`Enregistrer le type de dépense ${libelleAccessible}`}
+            enregistrement={enregistrement}
+            onAnnuler={handleAnnuler}
+            onEnregistrer={handleEnregistrer}
+          />
+        </ThemedView>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView type="background" style={styles.ligneNiveau2}>
@@ -688,8 +844,24 @@ function LigneNiveau2({
           >
             <PlusIcon color={theme.textSecondary} size={16} />
           </Pressable>
+
+          <ActionsMenuButton
+            accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
+            title={item.libelle}
+            disabled={suppression}
+            actions={[
+              { label: 'Modifier', onPress: () => setEdition(true) },
+              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+            ]}
+          />
         </ThemedView>
       </ThemedView>
+
+      {erreur ? (
+        <ThemedText type="small" themeColor="danger" style={styles.ligneNiveau2Erreur}>
+          {erreur}
+        </ThemedText>
+      ) : null}
 
       {ouvert ? <Niveau3Liste niveau2Id={item.id} montantsParType3={montantsParType3} /> : null}
     </ThemedView>
@@ -1839,6 +2011,30 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Formulaire d'édition (Modifier, via le menu ⋮ réintégré — voir le
+  // commentaire au-dessus de LigneNiveau2) : remplace l'en-tête le temps de
+  // l'édition, même structure que l'ancien Niveau2RowCollapsible.
+  ligneNiveau2Edition: {
+    gap: Spacing.one,
+    padding: Spacing.one,
+  },
+  ligneNiveau2Erreur: {
+    paddingTop: Spacing.one,
+  },
+  // Sélecteur Fixe/Variable (Niveau1Selector), utilisé uniquement en édition
+  // d'un type niveau 2 — jamais à la création (voir PopupAjoutNiveau2).
+  niveau1Row: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  niveau1ChipWrapper: {
+    flex: 1,
+  },
+  niveau1Chip: {
+    alignItems: 'center',
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
   },
   // Lignes niveau 3 : indentation sous leur ligne niveau 2 parente.
   niveau3Liste: {
