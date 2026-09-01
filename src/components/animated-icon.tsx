@@ -5,14 +5,15 @@ import { StyleSheet, View, useColorScheme } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { Colors } from '@/constants/theme';
+
 const DURATION = 600;
 
-// Doit rester alignée sur `expo.plugins["expo-splash-screen"].backgroundColor`
-// / `.dark.backgroundColor` (app.json) et sur `Colors.*.primary`
-// (src/constants/theme.ts, charte graphique — ticket #26) : ce splash natif
-// s'affiche avant que le JS (donc le thème) ne soit chargé, ces valeurs ne
-// peuvent pas être importées depuis theme.ts ici.
-const SPLASH_BACKGROUND = { light: '#457A5A', dark: '#87C39C' };
+// `Colors.*.primary` doit rester alignée sur
+// `expo.plugins["expo-splash-screen"].backgroundColor` / `.dark.backgroundColor`
+// (app.json) : ce fichier JSON, lui, ne peut pas importer theme.ts (lu par
+// Expo au build, avant tout JS applicatif) — sa valeur reste à dupliquer et
+// tenir à jour manuellement si `primary` change.
 
 export function AnimatedSplashOverlay() {
   const scheme = useColorScheme();
@@ -52,7 +53,7 @@ export function AnimatedSplashOverlay() {
       })}
       style={[
         styles.splashOverlay,
-        { backgroundColor: SPLASH_BACKGROUND[scheme === 'dark' ? 'dark' : 'light'] },
+        { backgroundColor: Colors[scheme === 'dark' ? 'dark' : 'light'].primary },
       ]}
     >
       {image}
@@ -66,7 +67,7 @@ export function AnimatedSplashOverlay() {
       }}
       style={[
         styles.splashOverlay,
-        { backgroundColor: SPLASH_BACKGROUND[scheme === 'dark' ? 'dark' : 'light'] },
+        { backgroundColor: Colors[scheme === 'dark' ? 'dark' : 'light'].primary },
       ]}
     >
       {image}

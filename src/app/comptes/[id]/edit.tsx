@@ -356,21 +356,43 @@ function Niveau1Selector({
   );
 }
 
+// Reste local à cet écran (non exporté) plutôt que déplacé dans
+// src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
+// par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
+// dans src/components/ ne le serait pas et exigerait ses propres tests. À
+// extraire quand un deuxième écran de liste en aura vraiment besoin (voir
+// docs/design/charte-graphique.md), pas avant.
+type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
+
+// Construit la liste de boutons d'un Alert.alert : « Annuler » toujours en
+// tête, puis les actions demandées. Partagé par demanderConfirmationSuppression
+// et ActionsMenuButton ci-dessous, qui sont chacun une variante (1 action
+// destructive fixe / N actions arbitraires) du même Alert.alert.
+function alertActions(actions: ActionMenuItem[]) {
+  return [
+    { text: 'Annuler', style: 'cancel' as const },
+    ...actions.map(({ label, onPress, destructive }) => ({
+      text: label,
+      style: destructive ? ('destructive' as const) : undefined,
+      onPress,
+    })),
+  ];
+}
+
 // Popup de confirmation partagée par les suppressions de cet écran (type de
 // dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
 // partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
 function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
-  Alert.alert(titre, message, [
-    { text: 'Annuler', style: 'cancel' },
-    { text: 'Supprimer', style: 'destructive', onPress: onConfirmer },
-  ]);
+  Alert.alert(
+    titre,
+    message,
+    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
+  );
 }
 
 // Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
 // pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
 // listes de l'onglet Dépenses par la charte graphique (ticket #26).
-type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
-
 function ActionsMenuButton({
   accessibilityLabel,
   title,
@@ -385,14 +407,7 @@ function ActionsMenuButton({
   actions: ActionMenuItem[];
 }) {
   const ouvrirActions = () => {
-    Alert.alert(title, message, [
-      { text: 'Annuler', style: 'cancel' },
-      ...actions.map(({ label, onPress, destructive }) => ({
-        text: label,
-        style: destructive ? ('destructive' as const) : undefined,
-        onPress,
-      })),
-    ]);
+    Alert.alert(title, message, alertActions(actions));
   };
 
   return (
@@ -1017,6 +1032,14 @@ function TypeDepenseNiveau3Row({
   };
 
   const marquerAbsente = async () => {
+    // Alert.alert ne permet pas de désactiver une entrée du menu ⋮
+    // individuellement (voir ActionsMenuButton, dont le `disabled` ne gate
+    // que `suppression`) : on protège donc ici contre un appel concurrent à
+    // un enregistrement déjà en cours sur cette même ligne (double-tap, ou
+    // Modifier + Marquer absente enchaînés rapidement).
+    if (enregistrement || suppression) {
+      return;
+    }
     setErreur(null);
     setEnregistrement(true);
     try {
@@ -1057,6 +1080,13 @@ function TypeDepenseNiveau3Row({
   };
 
   const handleSupprimer = () => {
+    // Même garde que marquerAbsente ci-dessus : évite de déclencher la
+    // suppression pendant qu'un enregistrement de montant est encore en
+    // cours sur cette ligne (risque de contrainte de clé étrangère si le
+    // montant s'insère après coup — voir le catch de `supprimer`).
+    if (enregistrement || suppression) {
+      return;
+    }
     demanderConfirmationSuppression(
       'Supprimer cette ligne ?',
       `« ${item.libelle} » sera définitivement supprimée.`,
