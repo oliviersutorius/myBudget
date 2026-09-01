@@ -386,17 +386,19 @@ function ActionsMenuButton({
   };
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      hitSlop={Spacing.two}
-      onPress={ouvrirActions}
-    >
-      <ThemedText type="title" style={styles.kebabGlyph}>
-        ⋮
-      </ThemedText>
-    </Pressable>
+    <ThemedView style={styles.actionsMenuButtonRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled}
+        hitSlop={Spacing.two}
+        onPress={ouvrirActions}
+      >
+        <ThemedText type="title" style={styles.kebabGlyph}>
+          ⋮
+        </ThemedText>
+      </Pressable>
+    </ThemedView>
   );
 }
 
@@ -853,17 +855,15 @@ function Niveau2RowCollapsible({
             </ThemedText>
           ) : null}
 
-          <ThemedView style={styles.typeRowActions}>
-            <ActionsMenuButton
-              accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
-              title={item.libelle}
-              disabled={suppression}
-              actions={[
-                { label: 'Modifier', onPress: () => setEdition(true) },
-                { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-              ]}
-            />
-          </ThemedView>
+          <ActionsMenuButton
+            accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
+            title={item.libelle}
+            disabled={suppression}
+            actions={[
+              { label: 'Modifier', onPress: () => setEdition(true) },
+              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+            ]}
+          />
         </ThemedView>
       )}
 
@@ -1127,29 +1127,35 @@ function TypeDepenseNiveau3Row({
         </ThemedText>
       ) : null}
 
-      <ThemedView style={styles.typeRowActions}>
-        <ActionsMenuButton
-          accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
-          title={item.libelle}
-          disabled={suppression || enregistrement}
-          actions={[
-            {
-              label: 'Modifier',
-              onPress: () => {
-                // Initialisé ici plutôt qu'au montage : `montant` provient
-                // d'une requête compte-wide (DepensesTab) qui peut ne pas
-                // avoir encore résolu quand cette ligne apparaît — on lit sa
-                // valeur la plus récente au moment où l'utilisateur ouvre
-                // effectivement l'édition.
-                setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
-                setEdition(true);
-              },
+      <ActionsMenuButton
+        accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
+        title={item.libelle}
+        // Alert.alert ne permet pas de désactiver une entrée individuellement
+        // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
+        // que par `suppression`, comme sur les lignes niveau 2, plutôt que
+        // d'y ajouter `enregistrement` — sinon « Modifier » redevient
+        // injoignable pendant l'enregistrement de « Marquer absente », alors
+        // que ça a toujours été possible (seules « Marquer absente » et
+        // « Supprimer » étaient gérées par ces deux états avant l'introduction
+        // de ce menu unique, voir #26).
+        disabled={suppression}
+        actions={[
+          {
+            label: 'Modifier',
+            onPress: () => {
+              // Initialisé ici plutôt qu'au montage : `montant` provient
+              // d'une requête compte-wide (DepensesTab) qui peut ne pas
+              // avoir encore résolu quand cette ligne apparaît — on lit sa
+              // valeur la plus récente au moment où l'utilisateur ouvre
+              // effectivement l'édition.
+              setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
+              setEdition(true);
             },
-            ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
-            { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-          ]}
-        />
-      </ThemedView>
+          },
+          ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
+          { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+        ]}
+      />
     </ThemedView>
   );
 }
@@ -1617,7 +1623,16 @@ const styles = StyleSheet.create({
   typeRowInfo: {
     gap: Spacing.half,
   },
+  // Utilisé uniquement par LigneActionsEdition (2 boutons Annuler/Enregistrer,
+  // espacés). ActionsMenuButton porte son propre style d'alignement
+  // (actionsMenuButtonRow) — ne pas réutiliser ce style-ci pour lui, voir le
+  // bug corrigé en review #26 (les deux partageaient ce style, l'un des deux
+  // en pâtissait à chaque changement de l'autre).
   typeRowActions: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
+  actionsMenuButtonRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
