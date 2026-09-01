@@ -3,9 +3,19 @@ import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+type ThemedTextType =
+  'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: ThemedTextType;
   themeColor?: ThemeColor;
+};
+
+// Couleur par défaut de chaque `type` quand `themeColor` n'est pas fourni.
+// Seuls les types qui dévient de `text` (le défaut implicite) ont besoin
+// d'une entrée ici — un type omis reste 'text'.
+const DEFAULT_COLOR_BY_TYPE: Partial<Record<ThemedTextType, ThemeColor>> = {
+  linkPrimary: 'primary',
 };
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
@@ -14,7 +24,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? (type === 'linkPrimary' ? 'primary' : 'text')] },
+        { color: theme[themeColor ?? DEFAULT_COLOR_BY_TYPE[type] ?? 'text'] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'small' && styles.small,

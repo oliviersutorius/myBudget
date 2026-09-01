@@ -356,6 +356,16 @@ function Niveau1Selector({
   );
 }
 
+// Popup de confirmation partagée par les suppressions de cet écran (type de
+// dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
+// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
+function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
+  Alert.alert(titre, message, [
+    { text: 'Annuler', style: 'cancel' },
+    { text: 'Supprimer', style: 'destructive', onPress: onConfirmer },
+  ]);
+}
+
 // Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
 // pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
 // listes de l'onglet Dépenses par la charte graphique (ticket #26).
@@ -779,13 +789,10 @@ function Niveau2RowCollapsible({
   };
 
   const handleSupprimer = () => {
-    Alert.alert(
+    demanderConfirmationSuppression(
       'Supprimer ce type de dépense ?',
       `« ${item.libelle} » sera définitivement supprimé.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-      ],
+      supprimer,
     );
   };
 
@@ -1050,10 +1057,11 @@ function TypeDepenseNiveau3Row({
   };
 
   const handleSupprimer = () => {
-    Alert.alert('Supprimer cette ligne ?', `« ${item.libelle} » sera définitivement supprimée.`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-    ]);
+    demanderConfirmationSuppression(
+      'Supprimer cette ligne ?',
+      `« ${item.libelle} » sera définitivement supprimée.`,
+      supprimer,
+    );
   };
 
   if (edition) {
@@ -1307,10 +1315,11 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
   };
 
   const confirmerSuppression = () => {
-    Alert.alert('Supprimer ce revenu ?', `« ${revenu.libelle} » sera définitivement supprimé.`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-    ]);
+    demanderConfirmationSuppression(
+      'Supprimer ce revenu ?',
+      `« ${revenu.libelle} » sera définitivement supprimé.`,
+      supprimer,
+    );
   };
 
   return (
