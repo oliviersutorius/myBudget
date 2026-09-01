@@ -67,7 +67,11 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
+    // Doit rester alignée sur `expo.plugins["expo-splash-screen"].backgroundColor`
+    // (app.json) et sur `Colors.*.primary` (src/constants/theme.ts, charte
+    // graphique — ticket #26) : ce splash natif s'affiche avant que le JS
+    // (donc le thème) ne soit chargé, la couleur ne peut pas être importée ici.
+    backgroundColor: '#3C87F7',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

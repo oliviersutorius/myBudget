@@ -7,6 +7,12 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// Palette myBudget (charte graphique, ticket #26) : couleurs neutres +
+// `primary` (accent, actions principales) et `danger` (erreurs, suppression).
+// `primary`/`danger` gardent la même valeur en light et en dark — comme
+// c'était déjà le cas de façon informelle avant cette charte (voir
+// docs/design/charte-graphique.md) — pour rester simple à maintenir tant que
+// leur contraste reste correct sur les deux fonds.
 export const Colors = {
   light: {
     text: '#000000',
@@ -14,6 +20,8 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    primary: '#3C87F7',
+    danger: '#D92D20',
   },
   dark: {
     text: '#ffffff',
@@ -21,6 +29,8 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    primary: '#3C87F7',
+    danger: '#D92D20',
   },
 } as const;
 
