@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -613,6 +613,16 @@ function PaveNiveau1({
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(true);
+  // Une fois déplié au moins une fois, le contenu du pavé (liste des
+  // LigneNiveau2, ou message vide) reste monté — juste masqué avec
+  // `display: 'none'` au repli — plutôt que démonté (review #41) : sinon un
+  // ajout/une édition niveau 2 en cours dans une ligne enfant serait perdu
+  // silencieusement si l'utilisateur replie le pavé parent (toujours
+  // visible, donc toujours cliquable) pendant cette édition, et rouvrir
+  // redéclencherait un nouvel abonnement useLiveQuery par ligne au lieu de
+  // réutiliser l'existant. `ouvert` démarre à `true`, donc `aEteOuvert` l'est
+  // aussi dès le départ.
+  const [aEteOuvert, setAEteOuvert] = useState(true);
   const titre = LIBELLE_NIVEAU1[niveau1];
 
   return (
@@ -621,7 +631,10 @@ function PaveNiveau1({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le pavé ${titre}`}
-          onPress={() => setOuvert((valeur) => !valeur)}
+          onPress={() => {
+            setOuvert((valeur) => !valeur);
+            setAEteOuvert(true);
+          }}
           style={styles.paveNiveau1Toggle}
         >
           <ChevronIcon direction={ouvert ? 'bas' : 'droite'} color={theme.text} size={14} />
@@ -639,6 +652,7 @@ function PaveNiveau1({
               // l'utilisateur ne déplie pas lui-même le pavé (voir AC du
               // ticket #41 : « la nouvelle ligne apparaît dans le pavé »).
               setOuvert(true);
+              setAEteOuvert(true);
               onAjouterNiveau2();
             }}
           >
@@ -649,24 +663,26 @@ function PaveNiveau1({
         </ThemedView>
       </ThemedView>
 
-      {ouvert ? (
-        types.length === 0 ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            Aucun type « {titre} » pour l’instant.
-          </ThemedText>
-        ) : (
-          <ThemedView style={styles.typesList}>
-            {types.map((type) => (
-              <LigneNiveau2
-                key={type.id}
-                item={type}
-                montantsParType3={montantsParType3}
-                sommeParNiveau2={sommeParNiveau2}
-                onAjouterNiveau3={() => onAjouterNiveau3(type)}
-              />
-            ))}
-          </ThemedView>
-        )
+      {aEteOuvert ? (
+        <ThemedView style={ouvert ? undefined : styles.masqueDisplayNone}>
+          {types.length === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Aucun type « {titre} » pour l’instant.
+            </ThemedText>
+          ) : (
+            <ThemedView style={styles.typesList}>
+              {types.map((type) => (
+                <LigneNiveau2
+                  key={type.id}
+                  item={type}
+                  montantsParType3={montantsParType3}
+                  sommeParNiveau2={sommeParNiveau2}
+                  onAjouterNiveau3={() => onAjouterNiveau3(type)}
+                />
+              ))}
+            </ThemedView>
+          )}
+        </ThemedView>
       ) : null}
     </ThemedView>
   );
@@ -698,6 +714,15 @@ function LigneNiveau2({
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
+  // Une fois dépliée au moins une fois, Niveau3Liste reste montée (juste
+  // masquée avec `display: 'none'` au repli) plutôt que démontée (review
+  // #41) : sinon un ajout ou une édition niveau 3 en cours (ex. « Modifier »
+  // ouvert sur une sous-ligne) serait perdu silencieusement si l'utilisateur
+  // tape sur l'en-tête parent — toujours visible, donc toujours cliquable —
+  // pour replier la ligne pendant cette édition ; redéplier redéclencherait
+  // en plus un nouvel abonnement useLiveQuery au lieu de réutiliser
+  // l'existant.
+  const [aEteOuvert, setAEteOuvert] = useState(false);
   // Édition (renommage/re-catégorisation fixe/variable) et suppression du
   // type niveau 2 lui-même : même logique que l'ancien Niveau2RowCollapsible
   // (avant la refonte #41), simplement réintégrée dans la nouvelle carte.
@@ -819,7 +844,10 @@ function LigneNiveau2({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} ${item.libelle}`}
-          onPress={() => setOuvert((valeur) => !valeur)}
+          onPress={() => {
+            setOuvert((valeur) => !valeur);
+            setAEteOuvert(true);
+          }}
           style={styles.ligneNiveau2Toggle}
         >
           <ChevronIcon direction={ouvert ? 'bas' : 'droite'} color={theme.text} size={14} />
@@ -838,6 +866,7 @@ function LigneNiveau2({
               // déplie la ligne pour que la nouvelle ligne niveau 3 créée
               // par la popup soit visible sans action supplémentaire.
               setOuvert(true);
+              setAEteOuvert(true);
               onAjouterNiveau3();
             }}
             style={styles.ligneNiveau2BoutonAjout}
@@ -863,7 +892,11 @@ function LigneNiveau2({
         </ThemedText>
       ) : null}
 
-      {ouvert ? <Niveau3Liste niveau2Id={item.id} montantsParType3={montantsParType3} /> : null}
+      {aEteOuvert ? (
+        <ThemedView style={ouvert ? undefined : styles.masqueDisplayNone}>
+          <Niveau3Liste niveau2Id={item.id} montantsParType3={montantsParType3} />
+        </ThemedView>
+      ) : null}
     </ThemedView>
   );
 }
@@ -1205,7 +1238,12 @@ function PopupChamp({
 // Pied de popup partagé (Annuler/Ajouter, voir charte graphique) : les deux
 // boutons alignés à droite, traitement neutre (pas de `primary`, voir le
 // ticket #41 — la maquette A ne réserve `primary` à aucun élément de cet
-// écran).
+// écran). Les deux boutons sont désactivés pendant `enregistrement` (review
+// #41) : sans ça, un tap sur « Annuler » pendant qu'un `handleAjouter` est
+// encore en vol referme la popup en donnant l'impression d'une annulation,
+// alors que l'écriture DB déjà lancée ne peut pas être interrompue et se
+// termine juste après — créant silencieusement la ligne malgré
+// l'« annulation ».
 function PopupPied({
   enregistrement,
   onAnnuler,
@@ -1224,6 +1262,7 @@ function PopupPied({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={labelAnnulerAccessible}
+        disabled={enregistrement}
         onPress={onAnnuler}
         style={styles.popupAnnulerZone}
       >
@@ -1244,6 +1283,85 @@ function PopupPied({
         </ThemedView>
       </Pressable>
     </ThemedView>
+  );
+}
+
+// Coquille commune aux deux popups d'ajout (Modal + voile + carte + entête +
+// pied) : mutualise la structure jusque-là dupliquée verbatim entre
+// PopupAjoutNiveau2 et PopupAjoutNiveau3 (review #41), qui ne diffèrent que
+// par leurs champs (passés en `children`, via PopupChamp) et leur logique
+// de soumission. Un futur correctif comportemental sur la coquille (ex. le
+// fix « Annuler désactivé pendant l'enregistrement » ci-dessus, sur
+// PopupPied) ne s'applique donc qu'à un seul endroit. Le voile
+// d'assombrissement fixe (indépendant du thème) est porté par
+// styles.popupVoile directement, voir sa définition dans le StyleSheet en
+// bas de fichier — pas recalculé ici.
+function Popup({
+  visible,
+  titre,
+  sousTitre,
+  enregistrement,
+  erreurEnregistrement,
+  onAnnuler,
+  onValider,
+  labelAnnulerAccessible,
+  labelValiderAccessible,
+  children,
+}: {
+  visible: boolean;
+  titre: string;
+  sousTitre: string;
+  enregistrement: boolean;
+  erreurEnregistrement: string | null;
+  onAnnuler: () => void;
+  onValider: () => void;
+  labelAnnulerAccessible: string;
+  labelValiderAccessible: string;
+  children: ReactNode;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        // Même garde que le bouton Annuler de PopupPied ci-dessus (désactivé
+        // pendant `enregistrement`) : le bouton retour Android déclenche
+        // aussi `onRequestClose`, il doit être soumis à la même règle pour
+        // ne pas rouvrir la même race (fermeture apparente pendant qu'une
+        // écriture DB est encore en vol).
+        if (!enregistrement) {
+          onAnnuler();
+        }
+      }}
+    >
+      <View style={styles.popupVoile}>
+        <ThemedView type="background" style={styles.popupCarte}>
+          <ThemedView style={styles.popupEntete}>
+            <ThemedText style={styles.popupTitre}>{titre}</ThemedText>
+            <ThemedText themeColor="textSecondary" style={styles.popupSousTitre}>
+              {sousTitre}
+            </ThemedText>
+          </ThemedView>
+
+          {children}
+
+          {erreurEnregistrement ? (
+            <ThemedText type="small" themeColor="danger">
+              {erreurEnregistrement}
+            </ThemedText>
+          ) : null}
+
+          <PopupPied
+            enregistrement={enregistrement}
+            onAnnuler={onAnnuler}
+            onValider={onValider}
+            labelAnnulerAccessible={labelAnnulerAccessible}
+            labelValiderAccessible={labelValiderAccessible}
+          />
+        </ThemedView>
+      </View>
+    </Modal>
   );
 }
 
@@ -1303,42 +1421,27 @@ function PopupAjoutNiveau2({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={fermer}>
-      <View style={[styles.popupVoile, { backgroundColor: hexToRgba(Colors.light.text, 0.5) }]}>
-        <ThemedView type="background" style={styles.popupCarte}>
-          <ThemedView style={styles.popupEntete}>
-            <ThemedText style={styles.popupTitre}>Ajouter un type de dépense</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.popupSousTitre}>
-              {niveau1 ? LIBELLE_NIVEAU1[niveau1] : ''}
-            </ThemedText>
-          </ThemedView>
-
-          <PopupChamp
-            label="Nom"
-            value={libelle}
-            onChangeText={setLibelle}
-            placeholder="Ex. Logement"
-            accessibilityLabel="Nom du nouveau type de dépense"
-            erreur={errors.libelle}
-            theme={theme}
-          />
-
-          {erreurEnregistrement ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreurEnregistrement}
-            </ThemedText>
-          ) : null}
-
-          <PopupPied
-            enregistrement={enregistrement}
-            onAnnuler={fermer}
-            onValider={handleAjouter}
-            labelAnnulerAccessible="Annuler l’ajout du type de dépense"
-            labelValiderAccessible="Ajouter le type de dépense"
-          />
-        </ThemedView>
-      </View>
-    </Modal>
+    <Popup
+      visible={visible}
+      titre="Ajouter un type de dépense"
+      sousTitre={niveau1 ? LIBELLE_NIVEAU1[niveau1] : ''}
+      enregistrement={enregistrement}
+      erreurEnregistrement={erreurEnregistrement}
+      onAnnuler={fermer}
+      onValider={handleAjouter}
+      labelAnnulerAccessible="Annuler l’ajout du type de dépense"
+      labelValiderAccessible="Ajouter le type de dépense"
+    >
+      <PopupChamp
+        label="Nom"
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Logement"
+        accessibilityLabel="Nom du nouveau type de dépense"
+        erreur={errors.libelle}
+        theme={theme}
+      />
+    </Popup>
   );
 }
 
@@ -1366,12 +1469,21 @@ function PopupAjoutNiveau3({
   const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  // Id de la ligne niveau 3 déjà créée par une tentative précédente, dont
+  // seul l'enregistrement du montant a échoué (review #41, écriture en 2
+  // étapes non-atomique : create puis set-montant). Tant que cet id est
+  // renseigné, une nouvelle tentative « Ajouter » ne rappelle plus
+  // createTypeDepenseNiveau3 (qui créerait un doublon à côté de la ligne
+  // déjà existante, orpheline de montant) : elle retente uniquement
+  // setMontantDepenseNiveau3 sur cet id.
+  const [niveau3CreeEnAttente, setNiveau3CreeEnAttente] = useState<number | null>(null);
 
   const fermer = () => {
     setLibelle('');
     setMontant('');
     setErrors({});
     setErreurEnregistrement(null);
+    setNiveau3CreeEnAttente(null);
     onFermer();
   };
 
@@ -1395,65 +1507,66 @@ function PopupAjoutNiveau3({
 
     setErreurEnregistrement(null);
     setEnregistrement(true);
+    // Copie locale de l'id en attente : évite de dépendre de l'état React
+    // (non relu à jour de façon synchrone après un setState) pour décider,
+    // dans le catch ci-dessous, si l'échec porte sur la création ou sur le
+    // seul enregistrement du montant.
+    let idPourMontant = niveau3CreeEnAttente;
     try {
-      const resultat = await createTypeDepenseNiveau3(niveau2.id, libelle.trim());
-      await setMontantDepenseNiveau3(resultat.lastInsertRowId, moisCourant(), montantEnCentimes);
+      if (idPourMontant === null) {
+        const resultat = await createTypeDepenseNiveau3(niveau2.id, libelle.trim());
+        idPourMontant = resultat.lastInsertRowId;
+        // Mémorisé dès la création réussie, avant l'écriture du montant
+        // ci-dessous : si celle-ci échoue, une nouvelle tentative retente
+        // uniquement setMontantDepenseNiveau3 sur cet id (voir plus haut).
+        setNiveau3CreeEnAttente(idPourMontant);
+      }
+      await setMontantDepenseNiveau3(idPourMontant, moisCourant(), montantEnCentimes);
       setEnregistrement(false);
       fermer();
     } catch {
-      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+      setErreurEnregistrement(
+        idPourMontant !== null
+          ? 'La ligne a bien été créée, mais l’enregistrement du montant a échoué : retapez « Ajouter » pour réessayer juste le montant.'
+          : 'L’ajout a échoué, réessayez.',
+      );
       setEnregistrement(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={fermer}>
-      <View style={[styles.popupVoile, { backgroundColor: hexToRgba(Colors.light.text, 0.5) }]}>
-        <ThemedView type="background" style={styles.popupCarte}>
-          <ThemedView style={styles.popupEntete}>
-            <ThemedText style={styles.popupTitre}>Ajouter une ligne</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.popupSousTitre}>
-              {niveau2 ? `${niveau2.libelle} · ${LIBELLE_NIVEAU1[niveau2.niveau1]}` : ''}
-            </ThemedText>
-          </ThemedView>
+    <Popup
+      visible={visible}
+      titre="Ajouter une ligne"
+      sousTitre={niveau2 ? `${niveau2.libelle} · ${LIBELLE_NIVEAU1[niveau2.niveau1]}` : ''}
+      enregistrement={enregistrement}
+      erreurEnregistrement={erreurEnregistrement}
+      onAnnuler={fermer}
+      onValider={handleAjouter}
+      labelAnnulerAccessible="Annuler l’ajout de la ligne"
+      labelValiderAccessible="Ajouter la ligne"
+    >
+      <PopupChamp
+        label="Nom"
+        value={libelle}
+        onChangeText={setLibelle}
+        placeholder="Ex. Crédit immobilier"
+        accessibilityLabel="Nom de la nouvelle ligne"
+        erreur={errors.libelle}
+        theme={theme}
+      />
 
-          <PopupChamp
-            label="Nom"
-            value={libelle}
-            onChangeText={setLibelle}
-            placeholder="Ex. Crédit immobilier"
-            accessibilityLabel="Nom de la nouvelle ligne"
-            erreur={errors.libelle}
-            theme={theme}
-          />
-
-          <PopupChamp
-            label="Montant"
-            value={montant}
-            onChangeText={setMontant}
-            placeholder="Ex. 1500"
-            keyboardType="decimal-pad"
-            accessibilityLabel="Montant de la nouvelle ligne"
-            erreur={errors.montant}
-            theme={theme}
-          />
-
-          {erreurEnregistrement ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreurEnregistrement}
-            </ThemedText>
-          ) : null}
-
-          <PopupPied
-            enregistrement={enregistrement}
-            onAnnuler={fermer}
-            onValider={handleAjouter}
-            labelAnnulerAccessible="Annuler l’ajout de la ligne"
-            labelValiderAccessible="Ajouter la ligne"
-          />
-        </ThemedView>
-      </View>
-    </Modal>
+      <PopupChamp
+        label="Montant"
+        value={montant}
+        onChangeText={setMontant}
+        placeholder="Ex. 1500"
+        keyboardType="decimal-pad"
+        accessibilityLabel="Montant de la nouvelle ligne"
+        erreur={errors.montant}
+        theme={theme}
+      />
+    </Popup>
   );
 }
 
@@ -2088,13 +2201,19 @@ const styles = StyleSheet.create({
   },
   // --- Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant ») -------
   // Traitement neutre commun aux deux popups (voir charte graphique
-  // §Popups d'ajout) : voile fixe (indépendant du thème, voir hexToRgba
-  // dans le rendu de PopupAjoutNiveau2/3) + carte centrée.
+  // §Popups d'ajout, composant Popup ci-dessus) : voile fixe + carte
+  // centrée. Le voile est volontairement fixe quel que soit le thème actif
+  // (toujours sombre, contrairement aux autres couleurs de cet écran) :
+  // backgroundColor calculé une seule fois ici, via hexToRgba(
+  // Colors.light.text, 0.5) plutôt que recopié en dur, pour respecter la
+  // règle « aucune couleur en dur » — review #41 : c'était auparavant
+  // recalculé inline et dupliqué dans les deux popups.
   popupVoile: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.three,
+    backgroundColor: hexToRgba(Colors.light.text, 0.5),
   },
   popupCarte: {
     width: '100%',
