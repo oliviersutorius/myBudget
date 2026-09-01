@@ -26,8 +26,18 @@ export interface TypeDepenseNiveau3FormErrors {
 // docs/DOMAIN.md §3.2), jamais saisi ici. En édition, niveau2Id vaut
 // toujours le niveau 2 déjà rattaché à la ligne (jamais modifiable a
 // posteriori) : la validation y est donc toujours satisfaite.
+//
+// `montantRequis` (ticket #41, défaut `false`) distingue les deux contextes
+// d'appel plutôt que de rendre `montant` inconditionnellement obligatoire,
+// ce qui casserait la sémantique d'édition ci-dessus :
+// - `false` (édition, TypeDepenseNiveau3Row) : un champ vide signifie « pas
+//   de changement de montant », jamais une erreur.
+// - `true` (popup d'ajout niveau 3) : le montant se saisit désormais en même
+//   temps que le libellé, donc un champ vide est une erreur comme les
+//   autres champs obligatoires.
 export function validateTypeDepenseNiveau3Form(
   values: TypeDepenseNiveau3FormValues,
+  montantRequis = false,
 ): TypeDepenseNiveau3FormErrors {
   const errors: TypeDepenseNiveau3FormErrors = {};
 
@@ -39,11 +49,11 @@ export function validateTypeDepenseNiveau3Form(
     errors.niveau2Id = 'Choisissez un type de dépense niveau 2.';
   }
 
-  if (
-    values.montant !== undefined &&
-    values.montant.trim().length > 0 &&
-    parseMontantEnCentimes(values.montant) === null
-  ) {
+  const montantTrim = values.montant?.trim() ?? '';
+
+  if (montantRequis && montantTrim.length === 0) {
+    errors.montant = 'Le montant est obligatoire.';
+  } else if (montantTrim.length > 0 && parseMontantEnCentimes(montantTrim) === null) {
     errors.montant = 'Le montant doit être un nombre positif.';
   }
 
