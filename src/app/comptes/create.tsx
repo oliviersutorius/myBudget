@@ -54,7 +54,7 @@ export default function CreationCompteScreen() {
             style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
           />
           {errors.nom ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {errors.nom}
             </ThemedText>
           ) : null}
@@ -71,14 +71,14 @@ export default function CreationCompteScreen() {
             style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
           />
           {errors.banque ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {errors.banque}
             </ThemedText>
           ) : null}
         </ThemedView>
 
         {erreurEnregistrement ? (
-          <ThemedText type="small" style={styles.errorText}>
+          <ThemedText type="small" themeColor="danger">
             {erreurEnregistrement}
           </ThemedText>
         ) : null}
@@ -117,9 +117,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
-  },
-  errorText: {
-    color: '#D92D20',
   },
   submitButton: {
     alignItems: 'center',

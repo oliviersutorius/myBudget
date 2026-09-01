@@ -7,20 +7,31 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+// Palette myBudget « Sauge » (charte graphique, ticket #26) : neutres teintés
+// vert (fond pastel très léger en light, charbon à dominante verte — jamais
+// noir pur — en dark) + `primary` (accent sauge, actions principales) et
+// `danger` (erreurs, suppression). Contrairement au premier jet de cette
+// charte, `primary` et `danger` ont chacun une valeur différente par mode :
+// éclaircis en dark pour rester lisibles sur un fond sombre plutôt que de
+// trancher trop froidement dessus. Voir docs/design/charte-graphique.md.
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#16231B',
+    background: '#F5FAF6',
+    backgroundElement: '#E7F1E9',
+    backgroundSelected: '#D4E6D8',
+    textSecondary: '#5C7568',
+    primary: '#457A5A',
+    danger: '#D92D20',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#EAF2EC',
+    background: '#141C15',
+    backgroundElement: '#1D291F',
+    backgroundSelected: '#28382B',
+    textSecondary: '#9BAFA0',
+    primary: '#87C39C',
+    danger: '#E5493C',
   },
 } as const;
 

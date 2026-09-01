@@ -214,7 +214,7 @@ export default function EditionCompteScreen() {
                   ]}
                 />
                 {errors.nom ? (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" themeColor="danger">
                     {errors.nom}
                   </ThemedText>
                 ) : null}
@@ -237,14 +237,14 @@ export default function EditionCompteScreen() {
                   ]}
                 />
                 {errors.banque ? (
-                  <ThemedText type="small" style={styles.errorText}>
+                  <ThemedText type="small" themeColor="danger">
                     {errors.banque}
                   </ThemedText>
                 ) : null}
               </ThemedView>
 
               {erreurEnregistrement ? (
-                <ThemedText type="small" style={styles.errorText}>
+                <ThemedText type="small" themeColor="danger">
                   {erreurEnregistrement}
                 </ThemedText>
               ) : null}
@@ -356,33 +356,72 @@ function Niveau1Selector({
   );
 }
 
-// Boutons Modifier/Supprimer partagés entre les lignes niveau 2 et niveau 3
-// (même comportement, seuls les libellés accessibles diffèrent).
-function LigneActionsAffichage({
-  labelModifier,
-  labelSupprimer,
-  suppression,
-  onModifier,
-  onSupprimer,
+// Reste local à cet écran (non exporté) plutôt que déplacé dans
+// src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
+// par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
+// dans src/components/ ne le serait pas et exigerait ses propres tests. À
+// extraire quand un deuxième écran de liste en aura vraiment besoin (voir
+// docs/design/charte-graphique.md), pas avant.
+type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
+
+// Construit la liste de boutons d'un Alert.alert : « Annuler » toujours en
+// tête, puis les actions demandées. Partagé par demanderConfirmationSuppression
+// et ActionsMenuButton ci-dessous, qui sont chacun une variante (1 action
+// destructive fixe / N actions arbitraires) du même Alert.alert.
+function alertActions(actions: ActionMenuItem[]) {
+  return [
+    { text: 'Annuler', style: 'cancel' as const },
+    ...actions.map(({ label, onPress, destructive }) => ({
+      text: label,
+      style: destructive ? ('destructive' as const) : undefined,
+      onPress,
+    })),
+  ];
+}
+
+// Popup de confirmation partagée par les suppressions de cet écran (type de
+// dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
+// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
+function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
+  Alert.alert(
+    titre,
+    message,
+    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
+  );
+}
+
+// Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
+// pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
+// listes de l'onglet Dépenses par la charte graphique (ticket #26).
+function ActionsMenuButton({
+  accessibilityLabel,
+  title,
+  message,
+  disabled,
+  actions,
 }: {
-  labelModifier: string;
-  labelSupprimer: string;
-  suppression: boolean;
-  onModifier: () => void;
-  onSupprimer: () => void;
+  accessibilityLabel: string;
+  title: string;
+  message?: string;
+  disabled?: boolean;
+  actions: ActionMenuItem[];
 }) {
+  const ouvrirActions = () => {
+    Alert.alert(title, message, alertActions(actions));
+  };
+
   return (
-    <ThemedView style={styles.typeRowActions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={labelModifier} onPress={onModifier}>
-        <ThemedText type="link">Modifier</ThemedText>
-      </Pressable>
+    <ThemedView style={styles.actionsMenuButtonRow}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={labelSupprimer}
-        disabled={suppression}
-        onPress={onSupprimer}
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled}
+        hitSlop={Spacing.two}
+        onPress={ouvrirActions}
       >
-        <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
+        <ThemedText type="title" style={styles.kebabGlyph}>
+          ⋮
+        </ThemedText>
       </Pressable>
     </ThemedView>
   );
@@ -547,7 +586,7 @@ function AjoutTypeNiveau2Form({ compteId }: { compteId: number }) {
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.libelle ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.libelle}
         </ThemedText>
       ) : null}
@@ -558,13 +597,13 @@ function AjoutTypeNiveau2Form({ compteId }: { compteId: number }) {
         accessibilityLabelPrefix="Nouveau type de dépense"
       />
       {errors.niveau1 ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.niveau1}
         </ThemedText>
       ) : null}
 
       {erreurEnregistrement ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {erreurEnregistrement}
         </ThemedText>
       ) : null}
@@ -652,7 +691,7 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
         ))}
       </ThemedView>
       {errors.niveau2Id ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.niveau2Id}
         </ThemedText>
       ) : null}
@@ -666,13 +705,13 @@ function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNivea
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.libelle ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.libelle}
         </ThemedText>
       ) : null}
 
       {erreurEnregistrement ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {erreurEnregistrement}
         </ThemedText>
       ) : null}
@@ -765,13 +804,10 @@ function Niveau2RowCollapsible({
   };
 
   const handleSupprimer = () => {
-    Alert.alert(
+    demanderConfirmationSuppression(
       'Supprimer ce type de dépense ?',
       `« ${item.libelle} » sera définitivement supprimé.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-      ],
+      supprimer,
     );
   };
 
@@ -786,7 +822,7 @@ function Niveau2RowCollapsible({
             style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
           />
           {errors.libelle ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {errors.libelle}
             </ThemedText>
           ) : null}
@@ -797,13 +833,13 @@ function Niveau2RowCollapsible({
             accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
           />
           {errors.niveau1 ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {errors.niveau1}
             </ThemedText>
           ) : null}
 
           {erreur ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {erreur}
             </ThemedText>
           ) : null}
@@ -836,17 +872,19 @@ function Niveau2RowCollapsible({
           </Pressable>
 
           {erreur ? (
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" themeColor="danger">
               {erreur}
             </ThemedText>
           ) : null}
 
-          <LigneActionsAffichage
-            labelModifier={`Modifier le type de dépense ${libelleAccessible}`}
-            labelSupprimer={`Supprimer le type de dépense ${libelleAccessible}`}
-            suppression={suppression}
-            onModifier={() => setEdition(true)}
-            onSupprimer={handleSupprimer}
+          <ActionsMenuButton
+            accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
+            title={item.libelle}
+            disabled={suppression}
+            actions={[
+              { label: 'Modifier', onPress: () => setEdition(true) },
+              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+            ]}
           />
         </ThemedView>
       )}
@@ -994,6 +1032,14 @@ function TypeDepenseNiveau3Row({
   };
 
   const marquerAbsente = async () => {
+    // Alert.alert ne permet pas de désactiver une entrée du menu ⋮
+    // individuellement (voir ActionsMenuButton, dont le `disabled` ne gate
+    // que `suppression`) : on protège donc ici contre un appel concurrent à
+    // un enregistrement déjà en cours sur cette même ligne (double-tap, ou
+    // Modifier + Marquer absente enchaînés rapidement).
+    if (enregistrement || suppression) {
+      return;
+    }
     setErreur(null);
     setEnregistrement(true);
     try {
@@ -1034,10 +1080,18 @@ function TypeDepenseNiveau3Row({
   };
 
   const handleSupprimer = () => {
-    Alert.alert('Supprimer cette ligne ?', `« ${item.libelle} » sera définitivement supprimée.`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-    ]);
+    // Même garde que marquerAbsente ci-dessus : évite de déclencher la
+    // suppression pendant qu'un enregistrement de montant est encore en
+    // cours sur cette ligne (risque de contrainte de clé étrangère si le
+    // montant s'insère après coup — voir le catch de `supprimer`).
+    if (enregistrement || suppression) {
+      return;
+    }
+    demanderConfirmationSuppression(
+      'Supprimer cette ligne ?',
+      `« ${item.libelle} » sera définitivement supprimée.`,
+      supprimer,
+    );
   };
 
   if (edition) {
@@ -1050,7 +1104,7 @@ function TypeDepenseNiveau3Row({
           style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
         />
         {errors.libelle ? (
-          <ThemedText type="small" style={styles.errorText}>
+          <ThemedText type="small" themeColor="danger">
             {errors.libelle}
           </ThemedText>
         ) : null}
@@ -1065,13 +1119,13 @@ function TypeDepenseNiveau3Row({
           style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
         />
         {errors.montant ? (
-          <ThemedText type="small" style={styles.errorText}>
+          <ThemedText type="small" themeColor="danger">
             {errors.montant}
           </ThemedText>
         ) : null}
 
         {erreur ? (
-          <ThemedText type="small" style={styles.errorText}>
+          <ThemedText type="small" themeColor="danger">
             {erreur}
           </ThemedText>
         ) : null}
@@ -1106,46 +1160,40 @@ function TypeDepenseNiveau3Row({
       </ThemedView>
 
       {erreur ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {erreur}
         </ThemedText>
       ) : null}
 
-      <ThemedView style={styles.typeRowActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Modifier la ligne ${libelleAccessible}`}
-          disabled={suppression}
-          onPress={() => {
-            // Initialisé ici plutôt qu'au montage : `montant` provient d'une
-            // requête compte-wide (DepensesTab) qui peut ne pas avoir encore
-            // résolu quand cette ligne apparaît — on lit sa valeur la plus
-            // récente au moment où l'utilisateur ouvre effectivement l'édition.
-            setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
-            setEdition(true);
-          }}
-        >
-          <ThemedText type="link">Modifier</ThemedText>
-        </Pressable>
-        {montant !== null ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Marquer la ligne ${libelleAccessible} absente ce mois`}
-            disabled={enregistrement || suppression}
-            onPress={marquerAbsente}
-          >
-            <ThemedText type="link">Marquer absente</ThemedText>
-          </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Supprimer la ligne ${libelleAccessible}`}
-          disabled={suppression || enregistrement}
-          onPress={handleSupprimer}
-        >
-          <ThemedText type="link">{suppression ? 'Suppression…' : 'Supprimer'}</ThemedText>
-        </Pressable>
-      </ThemedView>
+      <ActionsMenuButton
+        accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
+        title={item.libelle}
+        // Alert.alert ne permet pas de désactiver une entrée individuellement
+        // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
+        // que par `suppression`, comme sur les lignes niveau 2, plutôt que
+        // d'y ajouter `enregistrement` — sinon « Modifier » redevient
+        // injoignable pendant l'enregistrement de « Marquer absente », alors
+        // que ça a toujours été possible (seules « Marquer absente » et
+        // « Supprimer » étaient gérées par ces deux états avant l'introduction
+        // de ce menu unique, voir #26).
+        disabled={suppression}
+        actions={[
+          {
+            label: 'Modifier',
+            onPress: () => {
+              // Initialisé ici plutôt qu'au montage : `montant` provient
+              // d'une requête compte-wide (DepensesTab) qui peut ne pas
+              // avoir encore résolu quand cette ligne apparaît — on lit sa
+              // valeur la plus récente au moment où l'utilisateur ouvre
+              // effectivement l'édition.
+              setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
+              setEdition(true);
+            },
+          },
+          ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
+          { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+        ]}
+      />
     </ThemedView>
   );
 }
@@ -1159,8 +1207,9 @@ function TypeDepenseNiveau3Row({
 //
 // Modifier/Supprimer sur chaque ligne : bouton « ⋮ » ouvrant un menu à 2
 // actions (option C validée par le développeur parmi 3 propositions
-// graphiques — voir ticket #26 pour en généraliser le style aux autres
-// listes de l'app). Modifier affiche le formulaire pré-rempli sous le
+// graphiques — voir ActionsMenuButton, généralisé aux autres listes de
+// l'onglet Dépenses par la charte graphique, ticket #26). Modifier affiche
+// le formulaire pré-rempli sous le
 // tableau (même emplacement que l'ajout) ; Supprimer ouvre une popup de
 // confirmation dédiée.
 function RevenusTab({ compteId }: { compteId: number }) {
@@ -1296,18 +1345,11 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
   };
 
   const confirmerSuppression = () => {
-    Alert.alert('Supprimer ce revenu ?', `« ${revenu.libelle} » sera définitivement supprimé.`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: supprimer },
-    ]);
-  };
-
-  const ouvrirActions = () => {
-    Alert.alert(revenu.libelle, formatCentimesEnEuros(revenu.montant), [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Modifier', onPress: onModifier },
-      { text: 'Supprimer', style: 'destructive', onPress: confirmerSuppression },
-    ]);
+    demanderConfirmationSuppression(
+      'Supprimer ce revenu ?',
+      `« ${revenu.libelle} » sera définitivement supprimé.`,
+      supprimer,
+    );
   };
 
   return (
@@ -1316,22 +1358,21 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
         <ThemedText type="small">{revenu.libelle}</ThemedText>
         <ThemedView style={styles.revenuCardRight}>
           <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
-          <Pressable
-            accessibilityRole="button"
+          <ActionsMenuButton
             accessibilityLabel={`Actions pour le revenu ${revenu.libelle}`}
+            title={revenu.libelle}
+            message={formatCentimesEnEuros(revenu.montant)}
             disabled={suppression}
-            hitSlop={Spacing.two}
-            onPress={ouvrirActions}
-          >
-            <ThemedText type="title" style={styles.kebabGlyph}>
-              ⋮
-            </ThemedText>
-          </Pressable>
+            actions={[
+              { label: 'Modifier', onPress: onModifier },
+              { label: 'Supprimer', onPress: confirmerSuppression, destructive: true },
+            ]}
+          />
         </ThemedView>
       </ThemedView>
 
       {erreur ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {erreur}
         </ThemedText>
       ) : null}
@@ -1433,7 +1474,7 @@ function RevenuForm({
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.libelle ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.libelle}
         </ThemedText>
       ) : null}
@@ -1448,13 +1489,13 @@ function RevenuForm({
         style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
       />
       {errors.montant ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {errors.montant}
         </ThemedText>
       ) : null}
 
       {erreurEnregistrement ? (
-        <ThemedText type="small" style={styles.errorText}>
+        <ThemedText type="small" themeColor="danger">
           {erreurEnregistrement}
         </ThemedText>
       ) : null}
@@ -1583,9 +1624,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     fontSize: 16,
   },
-  errorText: {
-    color: '#D92D20',
-  },
   submitButton: {
     alignItems: 'center',
     borderRadius: Spacing.two,
@@ -1624,9 +1662,18 @@ const styles = StyleSheet.create({
   typeRowInfo: {
     gap: Spacing.half,
   },
+  // Utilisé uniquement par LigneActionsEdition (2 boutons Annuler/Enregistrer,
+  // espacés). ActionsMenuButton porte son propre style d'alignement
+  // (actionsMenuButtonRow) — ne pas réutiliser ce style-ci pour lui, voir le
+  // bug corrigé en review #26 (les deux partageaient ce style, l'un des deux
+  // en pâtissait à chaque changement de l'autre).
   typeRowActions: {
     flexDirection: 'row',
     gap: Spacing.three,
+  },
+  actionsMenuButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   totalRow: {
     flexDirection: 'row',
