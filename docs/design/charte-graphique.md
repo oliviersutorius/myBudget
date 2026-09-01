@@ -49,10 +49,12 @@ Ne pas introduire de taille de police en dur dans un écran (`fontSize` ad hoc) 
 
 ## Iconographie
 
-**Pas de librairie d'icônes** (ni `@expo/vector-icons`, ni SVG) : l'app reste sur des caractères Unicode rendus en `ThemedText`, cohérent avec l'absence d'assets graphiques à maintenir sur une app simple.
+**`react-native-svg`**, seule dépendance d'icônes du projet (ajoutée par le ticket #41) : les glyphes Unicode utilisés jusque-là (`▾`/`▸`/`⋮`) sont remplacés par des icônes SVG traits (`<Svg><Path .../></Svg>`), sur l'onglet Dépenses et, par ricochet, sur l'onglet Revenus via le composant partagé `ActionsMenuButton`. Trois icônes locales à `src/app/comptes/[id]/edit.tsx` (`ChevronIcon`, `PlusIcon`, `KebabIcon`) : traits (`stroke`), jamais de remplissage plein sauf le kebab (3 points, `fill`) — couleur toujours pilotée par une prop résolue via `useTheme()`, jamais en dur. Restent locales à cet écran comme le reste des composants du fichier (voir le commentaire au-dessus d'`ActionsMenuButton`) ; à extraire vers `src/components/` le jour où un deuxième écran en a réellement besoin.
 
-- **Menu d'actions de ligne** : bouton « `⋮` » (kebab), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée. Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 2 et niveau 3) par ce ticket via le composant partagé `ActionsMenuButton` (`src/app/comptes/[id]/edit.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne.
-- **Chevrons de navigation** (`‹`/`›` pour changer de mois, `▾`/`▸` pour déplier/replier une ligne) : caractères Unicode simples, taille `title`/`smallBold` selon le contexte.
+- **Menu d'actions de ligne** : bouton « `⋮` » (kebab, icône `KebabIcon`), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée. Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 3) par la charte graphique (ticket #26) puis à la refonte de l'onglet Dépenses (ticket #41) via le composant partagé `ActionsMenuButton` (`src/app/comptes/[id]/edit.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne.
+- **Chevrons de dépli/repli** (`ChevronIcon`, direction `bas`/`droite`) : remplacent `▾`/`▸` pour les pavés niveau 1 et les lignes niveau 2 collapsables de l'onglet Dépenses (ticket #41).
+- **Chevrons de navigation** (`‹`/`›` pour changer de mois/année) : encore des caractères Unicode simples, taille `title`, hors du périmètre du ticket #41 (navigation mois/année de RevenusTab/BudgetTab, pas concernée par la refonte de l'onglet Dépenses) — à faire migrer vers `ChevronIcon` le jour où ces écrans sont retouchés, pas de raison de les laisser en Unicode indéfiniment.
+- **Zone tactile minimum 44×44** sur tout élément interactif portant une icône (bouton « + », « ⋮ », chevron de dépli/repli) : la zone visuelle de l'icône peut être plus petite (14 à 20px), mais le `Pressable`/conteneur qui la porte réserve toujours au moins 44×44 (voir `PaveNiveau1`, `LigneNiveau2`, `ActionsMenuButton` dans `edit.tsx`).
 - `expo-symbols` (SF Symbols) est présent dans le code hérité du scaffold (`src/app/(tabs)/explore.tsx`, `src/components/ui/collapsible.tsx`) mais n'est pas le standard retenu pour les écrans myBudget — ces fichiers sont du boilerplate de démo à retirer au fil de l'eau (voir commentaire dans `jest.config.js`), pas un précédent à suivre.
 
 ## Espacements
@@ -76,6 +78,21 @@ Rayons d'arrondi : `Spacing.two` (8) pour les éléments compacts (inputs, chips
 - Fonds neutres teintés sauge (jamais blanc/noir purs), un seul accent (`primary`) utilisé avec parcimonie — pas de dégradés, pas d'ombres portées marquées, pas d'illustrations.
 - Cards/lignes sur fond `backgroundElement`, jamais de bordure dessinée en plus (le contraste de fond suffit à délimiter).
 - Confirmations destructives systématiques via popup native (`Alert.alert`) plutôt que des UI de confirmation inline.
+
+## Popups d'ajout
+
+Pattern introduit par la refonte de l'onglet Dépenses (ticket #41, maquette A « Compact ») pour tout formulaire de création court (1 à 2 champs) déclenché depuis un bouton « + » — remplace les formulaires d'ajout jusque-là toujours visibles en pied de section (ex. l'ancien `AjoutTypeNiveau2Form`/`AjoutTypeNiveau3Form` de l'onglet Dépenses). Composant `Modal` natif de `react-native` (`transparent`, `animationType="fade"`, `onRequestClose` relié au bouton Annuler pour le bouton retour Android) — pas de librairie de modale tierce.
+
+**Traitement neutre** : à la différence d'autres actions de l'app, ces popups n'utilisent pas `primary` (choix délibéré de la maquette A, cohérent avec le reste de l'onglet Dépenses, qui n'y colore aucun élément — voir « Ton visuel général » ci-dessus). Tous les textes/boutons restent en `text`/`textSecondary`/`backgroundSelected`.
+
+- **Voile d'assombrissement** derrière la carte : `rgba(22, 35, 27, 0.5)`, c'est-à-dire le token `Colors.light.text` (`#16231B`) à 50 % d'opacité — **volontairement fixe quel que soit le thème actif** (un voile reste sombre en light comme en dark, contrairement aux autres couleurs de l'écran qui suivent `Colors.light`/`Colors.dark`). Construit via le helper `hexToRgba` (`src/utils/color.ts`) à partir du token, jamais recopié en dur, pour respecter la règle « aucune couleur en dur ».
+- **Carte modale** centrée : fond `background`, `border-radius: 16`, `padding: 20px 18px 18px`, `gap: 14` entre le bloc titre/sous-titre, chaque champ et le pied de popup, ombre portée légère (`shadowOpacity`/`elevation` faibles — pas de librairie dédiée pour un effet aussi simple).
+- **Titre + sous-titre** : titre `16px/700` (ex. « Ajouter un type de dépense », « Ajouter une ligne ») + sous-titre contextuel `12px` `textSecondary` rappelant où la ligne sera ajoutée (ex. « Fixe » pour une popup niveau 2, « Logement · Fixe » pour une popup niveau 3) — groupés dans un même bloc à `gap` serré, distinct du `gap: 14` du reste de la carte.
+- **Champ(s)** : label `12px/600` `textSecondary` au-dessus de chaque champ, champ fond `backgroundElement`, `border-radius: 8`, `padding: 11px 12px` — un seul champ (Nom) pour un ajout niveau 2, deux (Nom, Montant) pour un ajout niveau 3.
+- **Pied de popup** : « Annuler » en lien texte `14px/600` `textSecondary` + « Ajouter » en bouton plein fond `backgroundSelected` texte `text` `700`, `padding: 11px 22px`, `border-radius: 8` — alignés à droite, `gap: 20`.
+- **Zones tactiles** : `Annuler` et `Ajouter` réservent chacun une hauteur minimale de 44 (voir « Iconographie » ci-dessus pour la même règle appliquée aux icônes).
+
+Implémentation de référence : `PopupAjoutNiveau2`/`PopupAjoutNiveau3` (et les sous-composants partagés `PopupChamp`/`PopupPied`) dans `src/app/comptes/[id]/edit.tsx`.
 
 ## Hors scope de ce ticket
 
