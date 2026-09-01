@@ -2,21 +2,25 @@
 
 > Doc de référence design (ticket #26). Formalise les choix visuels de l'app pour que les futures maquettes (#15) et tous les écrans s'y conforment. Identité produit : **simplicité assumée** (voir `CLAUDE.md`) — pas de sur-design, des tokens minimaux mais cohérents.
 
-## Palette de couleurs
+## Palette de couleurs — « Sauge »
 
 Définie dans `src/constants/theme.ts` (`Colors.light` / `Colors.dark`), consommée via le hook `useTheme()` ou la prop `themeColor` de `ThemedText`/`ThemedView`. **Ne jamais coder une couleur en dur dans un écran** — toujours passer par un token de cette palette.
 
 | Token                | Light     | Dark      | Usage                                                        |
 | -------------------- | --------- | --------- | ------------------------------------------------------------ |
-| `text`               | `#000000` | `#ffffff` | Texte principal                                              |
-| `textSecondary`      | `#60646C` | `#B0B4BA` | Texte secondaire (libellés, métadonnées, placeholders)       |
-| `background`         | `#ffffff` | `#000000` | Fond d'écran                                                 |
-| `backgroundElement`  | `#F0F0F3` | `#212225` | Fond des éléments surélevés (cards, lignes de liste, inputs) |
-| `backgroundSelected` | `#E0E1E6` | `#2E3135` | État sélectionné/actif (onglet actif, ligne dépliée)         |
-| `primary`            | `#3C87F7` | `#3C87F7` | Accent — actions principales, liens mis en avant             |
-| `danger`             | `#D92D20` | `#D92D20` | Erreurs, actions destructives (suppression)                  |
+| `text`               | `#16231B` | `#EAF2EC` | Texte principal                                              |
+| `textSecondary`      | `#5C7568` | `#9BAFA0` | Texte secondaire (libellés, métadonnées, placeholders)       |
+| `background`         | `#F5FAF6` | `#141C15` | Fond d'écran                                                 |
+| `backgroundElement`  | `#E7F1E9` | `#1D291F` | Fond des éléments surélevés (cards, lignes de liste, inputs) |
+| `backgroundSelected` | `#D4E6D8` | `#28382B` | État sélectionné/actif (onglet actif, ligne dépliée)         |
+| `primary`            | `#457A5A` | `#87C39C` | Accent sauge — actions principales, liens mis en avant       |
+| `danger`             | `#D92D20` | `#E5493C` | Erreurs, actions destructives (suppression)                  |
 
-**`primary` et `danger` gardent la même valeur en light et en dark** (pas d'adaptation par mode) : c'était déjà l'usage de fait dans le code avant cette charte, et une seule valeur reste plus simple à maintenir pour une équipe d'1 développeur tant que le contraste reste correct sur les deux fonds. Neutres et accents ne sont volontairement pas étendus (pas de `success`, `warning`, etc.) tant qu'aucun écran n'en a besoin — cohérent avec la simplicité assumée du produit ; à ajouter à cette table le jour où un besoin réel apparaît.
+Trois pistes de vert ont été comparées (une plus douce/désaturée « Sauge », une émeraude vive, un pin profond) sur les onglets Dépenses et Revenus avant de retenir **Sauge**, jugée la plus cohérente avec la simplicité assumée du produit (moins « générateur de notifications », plus posée).
+
+**Les neutres sont teintés, pas gris/blanc/noir purs** : le fond `light` est un pastel vert très léger (`#F5FAF6`, pas blanc pur) et le fond `dark` un charbon à dominante verte (`#141C15`, pas noir pur) — premier essai de cette charte en noir/blanc pur jugé inadapté en dark (aucune identité, `primary` mal intégré dessus). `text`/`textSecondary` suivent la même logique (légèrement teintés plutôt que gris neutre).
+
+**`primary` et `danger` ont une valeur différente par mode** (contrairement au premier jet de cette charte) : chacun est éclairci en dark pour rester lisible sur le fond sombre plutôt que de trancher trop froidement dessus — `danger` en particulier est réchauffé (`#E5493C` au lieu de `#D92D20`) pour ne pas heurter sur le nouveau fond charbon vert. Neutres et accents ne sont volontairement pas étendus au-delà de ces 7 tokens (pas de `success`, `warning`, etc.) tant qu'aucun écran n'en a besoin — cohérent avec la simplicité assumée du produit ; à ajouter à cette table le jour où un besoin réel apparaît.
 
 **Sémantique des couleurs d'action** :
 
@@ -69,11 +73,11 @@ Rayons d'arrondi : `Spacing.two` (8) pour les éléments compacts (inputs, chips
 
 ## Ton visuel général
 
-- Fonds neutres (blanc/noir), un seul accent (`primary`) utilisé avec parcimonie — pas de dégradés, pas d'ombres portées marquées, pas d'illustrations.
+- Fonds neutres teintés sauge (jamais blanc/noir purs), un seul accent (`primary`) utilisé avec parcimonie — pas de dégradés, pas d'ombres portées marquées, pas d'illustrations.
 - Cards/lignes sur fond `backgroundElement`, jamais de bordure dessinée en plus (le contraste de fond suffit à délimiter).
 - Confirmations destructives systématiques via popup native (`Alert.alert`) plutôt que des UI de confirmation inline.
 
 ## Hors scope de ce ticket
 
-- **Icône d'app et splash artwork** : la couleur de fond du splash natif (`app.json`, `expo-splash-screen.backgroundColor`) et son miroir JS (`src/components/animated-icon.tsx`) ont été alignées sur `primary` (`#3C87F7`) par cohérence, mais l'artwork (logo Expo par défaut dans `assets/images/`, `assets/expo.icon`) reste à remplacer par une identité myBudget — tâche de branding séparée, pas couverte ici.
-- **Contraste `danger` en mode sombre** : `#D92D20` sur fond noir est à la limite du seuil WCAG AA pour du texte de taille normale (~4:1, seuil 4.5:1). Pas bloquant pour ce ticket (c'était déjà l'état avant), mais à revoir si un audit d'accessibilité dédié est planifié.
+- **Icône d'app et splash artwork** : la couleur de fond du splash natif (`app.json`, `expo-splash-screen.backgroundColor`/`.dark.backgroundColor`) et son miroir JS (`src/components/animated-icon.tsx`) ont été alignées sur `primary` (`#457A5A` light / `#87C39C` dark) par cohérence, mais l'artwork (logo Expo par défaut dans `assets/images/`, `assets/expo.icon`) reste à remplacer par une identité myBudget — tâche de branding séparée, pas couverte ici.
+- **Contraste** : les nouvelles valeurs n'ont pas fait l'objet d'un audit WCAG formel (choisies par comparaison visuelle sur maquette). Pas bloquant pour ce ticket, mais à revoir si un audit d'accessibilité dédié est planifié.

@@ -1,13 +1,21 @@
 import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 const DURATION = 600;
 
+// Doit rester alignée sur `expo.plugins["expo-splash-screen"].backgroundColor`
+// / `.dark.backgroundColor` (app.json) et sur `Colors.*.primary`
+// (src/constants/theme.ts, charte graphique — ticket #26) : ce splash natif
+// s'affiche avant que le JS (donc le thème) ne soit chargé, ces valeurs ne
+// peuvent pas être importées depuis theme.ts ici.
+const SPLASH_BACKGROUND = { light: '#457A5A', dark: '#87C39C' };
+
 export function AnimatedSplashOverlay() {
+  const scheme = useColorScheme();
   const [animate, setAnimate] = useState(false);
   const [visible, setVisible] = useState(true);
 
@@ -42,7 +50,10 @@ export function AnimatedSplashOverlay() {
           scheduleOnRN(setVisible, false);
         }
       })}
-      style={styles.splashOverlay}
+      style={[
+        styles.splashOverlay,
+        { backgroundColor: SPLASH_BACKGROUND[scheme === 'dark' ? 'dark' : 'light'] },
+      ]}
     >
       {image}
     </Animated.View>
@@ -53,7 +64,10 @@ export function AnimatedSplashOverlay() {
           setAnimate(true);
         });
       }}
-      style={styles.splashOverlay}
+      style={[
+        styles.splashOverlay,
+        { backgroundColor: SPLASH_BACKGROUND[scheme === 'dark' ? 'dark' : 'light'] },
+      ]}
     >
       {image}
     </View>
@@ -67,11 +81,6 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    // Doit rester alignée sur `expo.plugins["expo-splash-screen"].backgroundColor`
-    // (app.json) et sur `Colors.*.primary` (src/constants/theme.ts, charte
-    // graphique — ticket #26) : ce splash natif s'affiche avant que le JS
-    // (donc le thème) ne soit chargé, la couleur ne peut pas être importée ici.
-    backgroundColor: '#3C87F7',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
