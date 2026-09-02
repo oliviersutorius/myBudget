@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChevronIcon, KebabIcon, PlusIcon } from '@/components/icons';
@@ -423,7 +423,12 @@ function AjoutPopup({
           ) : null}
 
           <ThemedView style={styles.popupFooter}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
               <ThemedText type="link">Annuler</ThemedText>
             </Pressable>
             <Pressable
@@ -449,37 +454,185 @@ function AjoutPopup({
 // dans src/components/ ne le serait pas et exigerait ses propres tests. À
 // extraire quand un deuxième écran de liste en aura vraiment besoin (voir
 // docs/design/charte-graphique.md), pas avant.
-type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
-
-// Construit la liste de boutons d'un Alert.alert : « Annuler » toujours en
-// tête, puis les actions demandées. Partagé par demanderConfirmationSuppression
-// et ActionsMenuButton ci-dessous, qui sont chacun une variante (1 action
-// destructive fixe / N actions arbitraires) du même Alert.alert.
-function alertActions(actions: ActionMenuItem[]) {
-  return [
-    { text: 'Annuler', style: 'cancel' as const },
-    ...actions.map(({ label, onPress, destructive }) => ({
-      text: label,
-      style: destructive ? ('destructive' as const) : undefined,
-      onPress,
-    })),
-  ];
-}
+type ActionMenuItem = {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  /** Action principale du menu (ex. « Modifier ») : mise en avant comme le
+   * bouton de validation d'AjoutPopup (fond `backgroundSelected`, texte
+   * gras) plutôt que comme les autres actions (fond `backgroundElement`).
+   */
+  primaire?: boolean;
+};
 
 // Popup de confirmation partagée par les suppressions de cet écran (type de
 // dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
-// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
-function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
-  Alert.alert(
-    titre,
-    message,
-    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
+// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenu.
+// Composant maison (ticket #45) — remplace l'ancien `Alert.alert` natif,
+// pour rester cohérent avec le style des autres popups de l'écran (voile,
+// carte, tokens Sauge, voir AjoutPopup). Chaque appelant porte son propre
+// état `visible` (une popup React ne peut pas s'ouvrir de façon impérative
+// comme l'ancien `Alert.alert`).
+function ConfirmationSuppression({
+  visible,
+  titre,
+  message,
+  onFermer,
+  onConfirmer,
+}: {
+  visible: boolean;
+  titre: string;
+  message: string;
+  onFermer: () => void;
+  onConfirmer: () => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onFermer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fermer la popup"
+        style={[styles.popupOverlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        onPress={onFermer}
+      >
+        {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand on
+            touche la carte elle-même — même pattern que AjoutPopup. */}
+        <Pressable
+          style={[styles.popupCard, { backgroundColor: theme.background }]}
+          onPress={() => {}}
+        >
+          <ThemedText type="smallBold">{titre}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {message}
+          </ThemedText>
+
+          <ThemedView style={styles.popupFooter}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
+              <ThemedText type="link">Annuler</ThemedText>
+            </Pressable>
+            {/* Vrai bouton (comme le « Ajouter »/« Enregistrer » d'AjoutPopup),
+                pas un simple lien texte : fond `backgroundElement` — pas
+                `backgroundSelected` (même vert sauge que les actions
+                positives), qui brouillerait le signal destructif sous un
+                libellé rouge — texte gras coloré danger. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Supprimer"
+              onPress={() => {
+                onFermer();
+                onConfirmer();
+              }}
+            >
+              <ThemedView type="backgroundElement" style={styles.actionsMenuButtonPill}>
+                <ThemedText type="smallBold" themeColor="danger">
+                  Supprimer
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          </ThemedView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
-// Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
-// pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
-// listes de l'onglet Dépenses par la charte graphique (ticket #26).
+// Popup listant les actions d'une ligne (Modifier/Supprimer, etc.) — composant
+// maison (ticket #45) remplaçant l'ancien menu `Alert.alert` natif, pour
+// rester cohérent avec le style des autres popups de l'écran. Utilisée par
+// ActionsMenuButton ci-dessous, qui porte l'état d'ouverture. Toutes les
+// actions (Annuler en tête, puis `actions` dans l'ordre fourni par
+// l'appelant) tiennent sur une seule ligne (retour du développeur suite à
+// #45). Chaque action est un vrai bouton identifiable visuellement — fond
+// `backgroundElement` (`backgroundSelected` + texte gras pour l'action
+// principale, ex. Modifier — même recette que le bouton de validation
+// d'AjoutPopup) — plutôt qu'un simple lien texte ; seul Annuler reste un
+// lien texte neutre, comme dans AjoutPopup/ConfirmationSuppression.
+// `flexWrap` reste un filet de sécurité si 4 boutons (Annuler, Modifier,
+// Marquer absente, Supprimer) ne tiennent pas sur un très petit écran.
+function ActionsMenu({
+  visible,
+  titre,
+  sousTitre,
+  onFermer,
+  actions,
+}: {
+  visible: boolean;
+  titre: string;
+  sousTitre?: string;
+  onFermer: () => void;
+  actions: ActionMenuItem[];
+}) {
+  const theme = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onFermer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fermer le menu"
+        style={[styles.popupOverlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        onPress={onFermer}
+      >
+        <Pressable
+          style={[styles.popupCard, { backgroundColor: theme.background }]}
+          onPress={() => {}}
+        >
+          <ThemedText type="smallBold">{titre}</ThemedText>
+          {sousTitre ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              {sousTitre}
+            </ThemedText>
+          ) : null}
+
+          <ThemedView style={styles.actionsMenuFooter}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
+              <ThemedText type="link">Annuler</ThemedText>
+            </Pressable>
+            {actions.map((action) => (
+              <Pressable
+                key={action.label}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                onPress={() => {
+                  onFermer();
+                  action.onPress();
+                }}
+              >
+                <ThemedView
+                  type={action.primaire ? 'backgroundSelected' : 'backgroundElement'}
+                  style={styles.actionsMenuButtonPill}
+                >
+                  <ThemedText
+                    type={action.primaire ? 'smallBold' : 'small'}
+                    themeColor={action.destructive ? 'danger' : undefined}
+                  >
+                    {action.label}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            ))}
+          </ThemedView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// Bouton « ⋮ » ouvrant le menu d'actions (Modifier/Supprimer, etc.) —
+// pattern établi par RevenuRow (ticket #12), généralisé à toutes les listes
+// de l'onglet Dépenses par la charte graphique (ticket #26), et migré du
+// menu `Alert.alert` natif vers une popup maison (ActionsMenu ci-dessus)
+// par le ticket #45.
 function ActionsMenuButton({
   accessibilityLabel,
   title,
@@ -494,21 +647,28 @@ function ActionsMenuButton({
   actions: ActionMenuItem[];
 }) {
   const theme = useTheme();
-
-  const ouvrirActions = () => {
-    Alert.alert(title, message, alertActions(actions));
-  };
+  const [ouvert, setOuvert] = useState(false);
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      onPress={ouvrirActions}
-      style={styles.actionsMenuButton}
-    >
-      <KebabIcon color={theme.text} />
-    </Pressable>
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled}
+        onPress={() => setOuvert(true)}
+        style={styles.actionsMenuButton}
+      >
+        <KebabIcon color={theme.text} />
+      </Pressable>
+
+      <ActionsMenu
+        visible={ouvert}
+        titre={title}
+        sousTitre={message}
+        onFermer={() => setOuvert(false)}
+        actions={actions}
+      />
+    </>
   );
 }
 
@@ -750,6 +910,7 @@ function Niveau2Ligne({
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [confirmationSuppressionOuverte, setConfirmationSuppressionOuverte] = useState(false);
   const libelleAccessible = `${item.libelle} (#${item.id})`;
 
   // État de la popup d'ajout d'une ligne niveau 3, indépendant de l'état
@@ -811,11 +972,7 @@ function Niveau2Ligne({
   };
 
   const handleSupprimer = () => {
-    demanderConfirmationSuppression(
-      'Supprimer ce type de dépense ?',
-      `« ${item.libelle} » sera définitivement supprimé.`,
-      supprimer,
-    );
+    setConfirmationSuppressionOuverte(true);
   };
 
   const fermerAjout = () => {
@@ -891,7 +1048,7 @@ function Niveau2Ligne({
               title={item.libelle}
               disabled={suppression}
               actions={[
-                { label: 'Modifier', onPress: () => setEdition(true) },
+                { label: 'Modifier', onPress: () => setEdition(true), primaire: true },
                 { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
               ]}
             />
@@ -1006,6 +1163,14 @@ function Niveau2Ligne({
           ) : null}
         </ThemedView>
       </AjoutPopup>
+
+      <ConfirmationSuppression
+        visible={confirmationSuppressionOuverte}
+        titre="Supprimer ce type de dépense ?"
+        message={`« ${item.libelle} » sera définitivement supprimé.`}
+        onFermer={() => setConfirmationSuppressionOuverte(false)}
+        onConfirmer={supprimer}
+      />
     </>
   );
 }
@@ -1067,6 +1232,7 @@ function TypeDepenseNiveau3Row({
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [confirmationSuppressionOuverte, setConfirmationSuppressionOuverte] = useState(false);
   const libelleAccessible = `${item.libelle} (#${item.id})`;
   // Garde-fou anti-unmount (même pattern que RevenuRow/RevenuForm) : évite
   // un setState après démontage si la ligne disparaît (suppression) pendant
@@ -1132,11 +1298,11 @@ function TypeDepenseNiveau3Row({
   };
 
   const marquerAbsente = async () => {
-    // Alert.alert ne permet pas de désactiver une entrée du menu ⋮
+    // Le menu d'actions ne permet pas de désactiver une entrée
     // individuellement (voir ActionsMenuButton, dont le `disabled` ne gate
-    // que `suppression`) : on protège donc ici contre un appel concurrent à
-    // un enregistrement déjà en cours sur cette même ligne (double-tap, ou
-    // Modifier + Marquer absente enchaînés rapidement).
+    // que tout le bouton ⋮, via `suppression`) : on protège donc ici contre
+    // un appel concurrent à un enregistrement déjà en cours sur cette même
+    // ligne (double-tap, ou Modifier + Marquer absente enchaînés rapidement).
     if (enregistrement || suppression) {
       return;
     }
@@ -1187,11 +1353,7 @@ function TypeDepenseNiveau3Row({
     if (enregistrement || suppression) {
       return;
     }
-    demanderConfirmationSuppression(
-      'Supprimer cette ligne ?',
-      `« ${item.libelle} » sera définitivement supprimée.`,
-      supprimer,
-    );
+    setConfirmationSuppressionOuverte(true);
   };
 
   return (
@@ -1219,7 +1381,7 @@ function TypeDepenseNiveau3Row({
           <ActionsMenuButton
             accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
             title={item.libelle}
-            // Alert.alert ne permet pas de désactiver une entrée individuellement
+            // Le menu d'actions ne permet pas de désactiver une entrée individuellement
             // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
             // que par `suppression`, comme sur les lignes niveau 2, plutôt que
             // d'y ajouter `enregistrement` — sinon « Modifier » redevient
@@ -1240,6 +1402,7 @@ function TypeDepenseNiveau3Row({
                   setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
                   setEdition(true);
                 },
+                primaire: true,
               },
               ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
               { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
@@ -1305,6 +1468,14 @@ function TypeDepenseNiveau3Row({
           ) : null}
         </ThemedView>
       </AjoutPopup>
+
+      <ConfirmationSuppression
+        visible={confirmationSuppressionOuverte}
+        titre="Supprimer cette ligne ?"
+        message={`« ${item.libelle} » sera définitivement supprimée.`}
+        onFermer={() => setConfirmationSuppressionOuverte(false)}
+        onConfirmer={supprimer}
+      />
     </>
   );
 }
@@ -1432,6 +1603,7 @@ function RevenusTab({ compteId }: { compteId: number }) {
 function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => void }) {
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [confirmationSuppressionOuverte, setConfirmationSuppressionOuverte] = useState(false);
   // Même garde-fou que RevenuForm : évite un setState après démontage si la
   // ligne disparaît (ex. changement de mois) pendant la suppression.
   const monte = useRef(true);
@@ -1455,14 +1627,6 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
     }
   };
 
-  const confirmerSuppression = () => {
-    demanderConfirmationSuppression(
-      'Supprimer ce revenu ?',
-      `« ${revenu.libelle} » sera définitivement supprimé.`,
-      supprimer,
-    );
-  };
-
   return (
     <ThemedView type="backgroundElement" style={styles.revenuCard}>
       <ThemedView style={styles.revenuCardRow}>
@@ -1475,8 +1639,12 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
             message={formatCentimesEnEuros(revenu.montant)}
             disabled={suppression}
             actions={[
-              { label: 'Modifier', onPress: onModifier },
-              { label: 'Supprimer', onPress: confirmerSuppression, destructive: true },
+              { label: 'Modifier', onPress: onModifier, primaire: true },
+              {
+                label: 'Supprimer',
+                onPress: () => setConfirmationSuppressionOuverte(true),
+                destructive: true,
+              },
             ]}
           />
         </ThemedView>
@@ -1487,6 +1655,14 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
           {erreur}
         </ThemedText>
       ) : null}
+
+      <ConfirmationSuppression
+        visible={confirmationSuppressionOuverte}
+        titre="Supprimer ce revenu ?"
+        message={`« ${revenu.libelle} » sera définitivement supprimé.`}
+        onFermer={() => setConfirmationSuppressionOuverte(false)}
+        onConfirmer={supprimer}
+      />
     </ThemedView>
   );
 }
@@ -1869,10 +2045,12 @@ const styles = StyleSheet.create({
   niveau3Libelle: {
     flex: 1,
   },
-  // Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant ») et popups
+  // Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant »), popups
   // « Modifier » (même composant AjoutPopup, ticket #41 — l'édition inline
   // d'origine des lignes niveau 2/niveau 3 a été remplacée par ces popups
-  // pour rester homogène avec le style des popups d'ajout) — voir
+  // pour rester homogène avec le style des popups d'ajout), et menu
+  // d'actions/confirmation de suppression (ActionsMenu, ConfirmationSuppression,
+  // ticket #45 — remplacent l'ancien `Alert.alert` natif) — voir
   // docs/design/charte-graphique.md § Popups d'ajout.
   popupOverlay: {
     flex: 1,
@@ -1897,6 +2075,34 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
+  },
+  // Zone tactile ≥ 44 sur le lien « Annuler » (AjoutPopup,
+  // ConfirmationSuppression, ActionsMenu) sans lui donner de fond — reste un
+  // lien texte neutre, contrairement aux vrais boutons à côté de lui.
+  popupAnnulerTouch: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  // Toutes les actions d'ActionsMenu (Annuler + `actions`) sur une seule
+  // ligne, alignées à droite comme les autres pieds de popup ; `flexWrap`
+  // en filet de sécurité si 4 boutons ne tiennent pas sur un très petit
+  // écran (voir ActionsMenu).
+  actionsMenuFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.three,
+  },
+  // Bouton d'action neutre/destructif d'ActionsMenu et bouton Supprimer de
+  // ConfirmationSuppression : padding plus compact que popupValiderButton
+  // (celui d'AjoutPopup, un seul bouton) pour laisser une chance à la ligne
+  // de 4 boutons du menu niveau 3 de tenir sans wrap.
+  actionsMenuButtonPill: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
   },
   anneeSelectorRow: {
     flexDirection: 'row',
