@@ -524,7 +524,13 @@ function ConfirmationSuppression({
 // Popup listant les actions d'une ligne (Modifier/Supprimer, etc.) — composant
 // maison (ticket #45) remplaçant l'ancien menu `Alert.alert` natif, pour
 // rester cohérent avec le style des autres popups de l'écran. Utilisée par
-// ActionsMenuButton ci-dessous, qui porte l'état d'ouverture.
+// ActionsMenuButton ci-dessous, qui porte l'état d'ouverture. Toutes les
+// actions (Annuler en tête, puis `actions` dans l'ordre fourni par
+// l'appelant) tiennent sur une seule ligne, en liens texte — même
+// traitement qu'Annuler/Supprimer dans ConfirmationSuppression — plutôt
+// qu'empilées verticalement (retour du développeur suite à #45) ;
+// `flexWrap` reste un filet de sécurité si 4 libellés (Annuler, Modifier,
+// Marquer absente, Supprimer) ne tiennent pas sur un très petit écran.
 function ActionsMenu({
   visible,
   titre,
@@ -559,7 +565,10 @@ function ActionsMenu({
             </ThemedText>
           ) : null}
 
-          <ThemedView style={styles.actionsMenuList}>
+          <ThemedView style={styles.actionsMenuFooter}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+              <ThemedText type="link">Annuler</ThemedText>
+            </Pressable>
             {actions.map((action) => (
               <Pressable
                 key={action.label}
@@ -570,23 +579,11 @@ function ActionsMenu({
                   action.onPress();
                 }}
               >
-                {/* Fond backgroundElement, comme toutes les autres lignes/cards
-                    de l'écran (pavés, lignes niveau 2/3, onglets…) — pas de
-                    texte nu sans support visuel, pour rester cohérent avec le
-                    reste de la charte. */}
-                <ThemedView type="backgroundElement" style={styles.actionsMenuItem}>
-                  <ThemedText type="small" themeColor={action.destructive ? 'danger' : 'text'}>
-                    {action.label}
-                  </ThemedText>
-                </ThemedView>
+                <ThemedText type="link" themeColor={action.destructive ? 'danger' : undefined}>
+                  {action.label}
+                </ThemedText>
               </Pressable>
             ))}
-          </ThemedView>
-
-          <ThemedView style={styles.popupFooter}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
-              <ThemedText type="link">Annuler</ThemedText>
-            </Pressable>
           </ThemedView>
         </Pressable>
       </Pressable>
@@ -2041,14 +2038,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
   },
-  actionsMenuList: {
-    gap: Spacing.one,
-  },
-  actionsMenuItem: {
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.three,
+  // Toutes les actions d'ActionsMenu (Annuler + `actions`) sur une seule
+  // ligne, alignées à droite comme les autres pieds de popup ; `flexWrap`
+  // en filet de sécurité si 4 libellés ne tiennent pas sur un très petit
+  // écran (voir ActionsMenu).
+  actionsMenuFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.three,
   },
   anneeSelectorRow: {
     flexDirection: 'row',
