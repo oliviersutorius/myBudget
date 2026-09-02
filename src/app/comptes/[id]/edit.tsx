@@ -423,7 +423,12 @@ function AjoutPopup({
           ) : null}
 
           <ThemedView style={styles.popupFooter}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
               <ThemedText type="link">Annuler</ThemedText>
             </Pressable>
             <Pressable
@@ -449,7 +454,16 @@ function AjoutPopup({
 // dans src/components/ ne le serait pas et exigerait ses propres tests. À
 // extraire quand un deuxième écran de liste en aura vraiment besoin (voir
 // docs/design/charte-graphique.md), pas avant.
-type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
+type ActionMenuItem = {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  /** Action principale du menu (ex. « Modifier ») : mise en avant comme le
+   * bouton de validation d'AjoutPopup (fond `backgroundSelected`, texte
+   * gras) plutôt que comme les autres actions (fond `backgroundElement`).
+   */
+  primaire?: boolean;
+};
 
 // Popup de confirmation partagée par les suppressions de cet écran (type de
 // dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
@@ -494,14 +508,19 @@ function ConfirmationSuppression({
           </ThemedText>
 
           <ThemedView style={styles.popupFooter}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
               <ThemedText type="link">Annuler</ThemedText>
             </Pressable>
-            {/* Même traitement « lien texte » qu'Annuler (pas de bouton plein
-                comme le « Ajouter »/« Enregistrer » d'AjoutPopup) : seule la
-                couleur danger le distingue — un fond backgroundSelected
-                (même vert sauge que les actions positives) sous un libellé
-                rouge aurait brouillé le signal destructif de ce bouton. */}
+            {/* Vrai bouton (comme le « Ajouter »/« Enregistrer » d'AjoutPopup),
+                pas un simple lien texte : fond `backgroundElement` — pas
+                `backgroundSelected` (même vert sauge que les actions
+                positives), qui brouillerait le signal destructif sous un
+                libellé rouge — texte gras coloré danger. */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Supprimer"
@@ -510,9 +529,11 @@ function ConfirmationSuppression({
                 onConfirmer();
               }}
             >
-              <ThemedText type="link" themeColor="danger">
-                Supprimer
-              </ThemedText>
+              <ThemedView type="backgroundElement" style={styles.actionsMenuButtonPill}>
+                <ThemedText type="smallBold" themeColor="danger">
+                  Supprimer
+                </ThemedText>
+              </ThemedView>
             </Pressable>
           </ThemedView>
         </Pressable>
@@ -526,10 +547,13 @@ function ConfirmationSuppression({
 // rester cohérent avec le style des autres popups de l'écran. Utilisée par
 // ActionsMenuButton ci-dessous, qui porte l'état d'ouverture. Toutes les
 // actions (Annuler en tête, puis `actions` dans l'ordre fourni par
-// l'appelant) tiennent sur une seule ligne, en liens texte — même
-// traitement qu'Annuler/Supprimer dans ConfirmationSuppression — plutôt
-// qu'empilées verticalement (retour du développeur suite à #45) ;
-// `flexWrap` reste un filet de sécurité si 4 libellés (Annuler, Modifier,
+// l'appelant) tiennent sur une seule ligne (retour du développeur suite à
+// #45). Chaque action est un vrai bouton identifiable visuellement — fond
+// `backgroundElement` (`backgroundSelected` + texte gras pour l'action
+// principale, ex. Modifier — même recette que le bouton de validation
+// d'AjoutPopup) — plutôt qu'un simple lien texte ; seul Annuler reste un
+// lien texte neutre, comme dans AjoutPopup/ConfirmationSuppression.
+// `flexWrap` reste un filet de sécurité si 4 boutons (Annuler, Modifier,
 // Marquer absente, Supprimer) ne tiennent pas sur un très petit écran.
 function ActionsMenu({
   visible,
@@ -566,7 +590,12 @@ function ActionsMenu({
           ) : null}
 
           <ThemedView style={styles.actionsMenuFooter}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Annuler"
+              onPress={onFermer}
+              style={styles.popupAnnulerTouch}
+            >
               <ThemedText type="link">Annuler</ThemedText>
             </Pressable>
             {actions.map((action) => (
@@ -579,9 +608,17 @@ function ActionsMenu({
                   action.onPress();
                 }}
               >
-                <ThemedText type="link" themeColor={action.destructive ? 'danger' : undefined}>
-                  {action.label}
-                </ThemedText>
+                <ThemedView
+                  type={action.primaire ? 'backgroundSelected' : 'backgroundElement'}
+                  style={styles.actionsMenuButtonPill}
+                >
+                  <ThemedText
+                    type={action.primaire ? 'smallBold' : 'small'}
+                    themeColor={action.destructive ? 'danger' : undefined}
+                  >
+                    {action.label}
+                  </ThemedText>
+                </ThemedView>
               </Pressable>
             ))}
           </ThemedView>
@@ -1011,7 +1048,7 @@ function Niveau2Ligne({
               title={item.libelle}
               disabled={suppression}
               actions={[
-                { label: 'Modifier', onPress: () => setEdition(true) },
+                { label: 'Modifier', onPress: () => setEdition(true), primaire: true },
                 { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
               ]}
             />
@@ -1365,6 +1402,7 @@ function TypeDepenseNiveau3Row({
                   setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
                   setEdition(true);
                 },
+                primaire: true,
               },
               ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
               { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
@@ -1601,7 +1639,7 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
             message={formatCentimesEnEuros(revenu.montant)}
             disabled={suppression}
             actions={[
-              { label: 'Modifier', onPress: onModifier },
+              { label: 'Modifier', onPress: onModifier, primaire: true },
               {
                 label: 'Supprimer',
                 onPress: () => setConfirmationSuppressionOuverte(true),
@@ -2038,9 +2076,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
   },
+  // Zone tactile ≥ 44 sur le lien « Annuler » (AjoutPopup,
+  // ConfirmationSuppression, ActionsMenu) sans lui donner de fond — reste un
+  // lien texte neutre, contrairement aux vrais boutons à côté de lui.
+  popupAnnulerTouch: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   // Toutes les actions d'ActionsMenu (Annuler + `actions`) sur une seule
   // ligne, alignées à droite comme les autres pieds de popup ; `flexWrap`
-  // en filet de sécurité si 4 libellés ne tiennent pas sur un très petit
+  // en filet de sécurité si 4 boutons ne tiennent pas sur un très petit
   // écran (voir ActionsMenu).
   actionsMenuFooter: {
     flexDirection: 'row',
@@ -2048,6 +2093,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: Spacing.three,
+  },
+  // Bouton d'action neutre/destructif d'ActionsMenu et bouton Supprimer de
+  // ConfirmationSuppression : padding plus compact que popupValiderButton
+  // (celui d'AjoutPopup, un seul bouton) pour laisser une chance à la ligne
+  // de 4 boutons du menu niveau 3 de tenir sans wrap.
+  actionsMenuButtonPill: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
   },
   anneeSelectorRow: {
     flexDirection: 'row',
