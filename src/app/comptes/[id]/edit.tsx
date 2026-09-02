@@ -497,6 +497,11 @@ function ConfirmationSuppression({
             <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
               <ThemedText type="link">Annuler</ThemedText>
             </Pressable>
+            {/* Même traitement « lien texte » qu'Annuler (pas de bouton plein
+                comme le « Ajouter »/« Enregistrer » d'AjoutPopup) : seule la
+                couleur danger le distingue — un fond backgroundSelected
+                (même vert sauge que les actions positives) sous un libellé
+                rouge aurait brouillé le signal destructif de ce bouton. */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Supprimer"
@@ -505,11 +510,9 @@ function ConfirmationSuppression({
                 onConfirmer();
               }}
             >
-              <ThemedView type="backgroundSelected" style={styles.popupValiderButton}>
-                <ThemedText type="smallBold" themeColor="danger">
-                  Supprimer
-                </ThemedText>
-              </ThemedView>
+              <ThemedText type="link" themeColor="danger">
+                Supprimer
+              </ThemedText>
             </Pressable>
           </ThemedView>
         </Pressable>
@@ -566,11 +569,16 @@ function ActionsMenu({
                   onFermer();
                   action.onPress();
                 }}
-                style={styles.actionsMenuItem}
               >
-                <ThemedText type="small" themeColor={action.destructive ? 'danger' : 'text'}>
-                  {action.label}
-                </ThemedText>
+                {/* Fond backgroundElement, comme toutes les autres lignes/cards
+                    de l'écran (pavés, lignes niveau 2/3, onglets…) — pas de
+                    texte nu sans support visuel, pour rester cohérent avec le
+                    reste de la charte. */}
+                <ThemedView type="backgroundElement" style={styles.actionsMenuItem}>
+                  <ThemedText type="small" themeColor={action.destructive ? 'danger' : 'text'}>
+                    {action.label}
+                  </ThemedText>
+                </ThemedView>
               </Pressable>
             ))}
           </ThemedView>
@@ -2034,11 +2042,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
   },
   actionsMenuList: {
-    gap: Spacing.half,
+    gap: Spacing.one,
   },
   actionsMenuItem: {
     minHeight: 44,
     justifyContent: 'center',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
   },
   anneeSelectorRow: {
     flexDirection: 'row',
