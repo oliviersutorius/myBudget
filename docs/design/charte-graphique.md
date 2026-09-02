@@ -49,11 +49,22 @@ Ne pas introduire de taille de police en dur dans un écran (`fontSize` ad hoc) 
 
 ## Iconographie
 
-**Pas de librairie d'icônes** (ni `@expo/vector-icons`, ni SVG) : l'app reste sur des caractères Unicode rendus en `ThemedText`, cohérent avec l'absence d'assets graphiques à maintenir sur une app simple.
+Depuis le ticket #41 (refonte de l'onglet Dépenses, maquette « A — Compact »), les icônes d'action — chevron de repli/dépliage, « + » d'ajout, « ⋮ » de menu — sont rendues en **SVG traits** via `react-native-svg`, composants `ChevronIcon`/`PlusIcon`/`KebabIcon` de `src/components/icons.tsx` (couleur toujours passée en prop depuis un token `theme.xxx`, jamais en dur). Ce pattern remplace les caractères Unicode précédemment utilisés pour ces 3 usages précis (`▾`/`▸`, `⋮`) — rendu plus net et cohérent quel que soit le poids de police système, quel que soit l'écran (`ActionsMenuButton`, partagé par les onglets Dépenses et Revenus, en bénéficie aussi).
 
-- **Menu d'actions de ligne** : bouton « `⋮` » (kebab), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée. Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 2 et niveau 3) par ce ticket via le composant partagé `ActionsMenuButton` (`src/app/comptes/[id]/edit.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne.
-- **Chevrons de navigation** (`‹`/`›` pour changer de mois, `▾`/`▸` pour déplier/replier une ligne) : caractères Unicode simples, taille `title`/`smallBold` selon le contexte.
+- **Menu d'actions de ligne** : bouton « ⋮ » (`KebabIcon`), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée. Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 2 et niveau 3) par le ticket #26 via le composant partagé `ActionsMenuButton` (`src/app/comptes/[id]/edit.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne.
+- **Chevrons de repli/dépliage** (pavé niveau 1, ligne niveau 2 de l'onglet Dépenses) : `ChevronIcon`, rotation SVG selon l'état ouvert/fermé.
+- **Chevrons de navigation** (`‹`/`›` pour changer de mois/année) : restent en caractères Unicode, taille `title`, non concernés par ce ticket — un seul usage, pas la peine d'en faire une icône SVG dédiée pour l'instant.
+- Zone tactile minimale `44×44` sur toute icône interactive (chevron de repli, `+`, `⋮`).
 - `expo-symbols` (SF Symbols) est présent dans le code hérité du scaffold (`src/app/(tabs)/explore.tsx`, `src/components/ui/collapsible.tsx`) mais n'est pas le standard retenu pour les écrans myBudget — ces fichiers sont du boilerplate de démo à retirer au fil de l'eau (voir commentaire dans `jest.config.js`), pas un précédent à suivre.
+
+## Popups d'ajout
+
+Introduit par le ticket #41 pour remplacer les formulaires d'ajout toujours visibles en bas d'écran (onglet Dépenses) : une popup modale (`AjoutPopup`, `src/app/comptes/[id]/edit.tsx`), déclenchée par un bouton « + » sur l'en-tête d'un pavé ou d'une ligne, plutôt qu'un formulaire affiché en permanence sous la liste.
+
+- **Traitement neutre** : pas de `primary` (comme le reste de la maquette « A — Compact ») — fond `background`, bouton de validation en `backgroundSelected`, lien « Annuler » en `text`/`textSecondary`.
+- **Structure** : voile d'assombrissement plein écran (dérivé du token `text` à 50% d'opacité, indépendant du thème actif — assombrit aussi bien un fond clair qu'un fond sombre) qui ferme la popup au tap ; carte centrée (fond `background`, radius `Spacing.three`) portant un titre (`smallBold`), un sous-titre contextuel optionnel (`small`/`textSecondary`, ex. le pavé ou la ligne parente), les champs du formulaire (réutilisant `styles.field`/`styles.input` déjà existants), un message d'erreur éventuel, puis un pied Annuler/Ajouter aligné à droite.
+- **Usage actuel** : ajout d'un type de dépense niveau 2 (1 champ, Nom) depuis un pavé niveau 1 ; ajout d'une ligne niveau 3 (2 champs, Nom + Montant) depuis une ligne niveau 2.
+- Reste locale à `edit.tsx` (comme les autres composants propres à cet écran, voir le commentaire au-dessus de `ActionMenuItem`) : à extraire dans `src/components/` si un deuxième écran en a besoin.
 
 ## Espacements
 
@@ -69,7 +80,9 @@ Ne pas introduire de taille de police en dur dans un écran (`fontSize` ad hoc) 
 | `five`  | 32     | Grand espacement (peu utilisé actuellement)        |
 | `six`   | 64     | Très grand espacement (peu utilisé actuellement)   |
 
-Rayons d'arrondi : `Spacing.two` (8) pour les éléments compacts (inputs, chips, lignes niveau 3), `Spacing.three` (16) pour les cards/lignes plus grandes (lignes niveau 2, boutons de soumission).
+Rayons d'arrondi : `Spacing.two` (8) pour les éléments compacts (inputs, chips, ligne niveau 2 imbriquée dans un pavé), `Spacing.three` (16) pour les cards/blocs plus grands (pavé niveau 1, popups d'ajout, boutons de soumission).
+
+La maquette du ticket #41 (onglet Dépenses) donne des tailles de texte/graisses et des rayons plus fins que cette échelle (ex. 17px/700, radius 10) : par choix (cohérence du design system, éviter la prolifération de tokens), l'écran réutilise l'échelle `ThemedText`/`Spacing` existante (`smallBold`/`small`, `Spacing.two`/`Spacing.three`) plutôt que d'introduire nos nouveaux `type`/valeurs pour chaque écart. Léger différentiel visuel avec la maquette source, jugé acceptable.
 
 ## Ton visuel général
 

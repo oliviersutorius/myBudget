@@ -31,6 +31,7 @@ module.exports = {
     '!src/db/queries/set-montant-depense-niveau3.ts', // idem : upsert mince, validation testée séparément (validate-type-depense-niveau3-form.ts)
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro
     '!src/components/animated-icon.web.tsx',
+    '!src/components/icons.tsx', // icônes SVG purement présentationnelles (ticket #41) — pas de logique à tester
 
     // Boilerplate de démo livré par `create-expo-app` (tabs/icônes/thème d'exemple) —
     // à supprimer (ou à tester) au fur et à mesure qu'ils sont remplacés par du vrai code

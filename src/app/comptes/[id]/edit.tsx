@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ChevronIcon, KebabIcon, PlusIcon } from '@/components/icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
@@ -356,6 +357,92 @@ function Niveau1Selector({
   );
 }
 
+// Overlay des popups d'ajout (ticket #41) : dérivé du token `text` (light) à
+// 50% d'opacité plutôt qu'une couleur en dur — reste volontairement le même
+// quel que soit le thème actif (assombrit aussi bien un fond clair qu'un
+// fond sombre), voir docs/design/charte-graphique.md § Popups d'ajout.
+const POPUP_OVERLAY_COLOR = `${Colors.light.text}80`;
+
+// Popup d'ajout générique (ticket #41, maquette « A — Compact »), partagée
+// par l'ajout d'un type niveau 2 (Niveau1Pave, 1 champ) et d'une ligne
+// niveau 3 (Niveau2Ligne, 2 champs) : traitement neutre, cohérent avec le
+// reste de la maquette (pas de `primary`). Reste locale à cet écran (non
+// exportée) pour la même raison que les autres composants ci-dessous — voir
+// le commentaire au-dessus de `ActionMenuItem`.
+function AjoutPopup({
+  visible,
+  titre,
+  sousTitre,
+  labelValider,
+  enregistrement,
+  erreur,
+  onFermer,
+  onValider,
+  children,
+}: {
+  visible: boolean;
+  titre: string;
+  sousTitre?: string;
+  labelValider: string;
+  enregistrement: boolean;
+  erreur: string | null;
+  onFermer: () => void;
+  onValider: () => void;
+  children: ReactNode;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onFermer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fermer la popup"
+        style={[styles.popupOverlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        onPress={onFermer}
+      >
+        {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand on
+            touche la carte elle-même (les zones tactiles des Pressable
+            enfants — champs, boutons — ne remontent pas jusqu'ici). */}
+        <Pressable
+          style={[styles.popupCard, { backgroundColor: theme.background }]}
+          onPress={() => {}}
+        >
+          <ThemedText type="smallBold">{titre}</ThemedText>
+          {sousTitre ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              {sousTitre}
+            </ThemedText>
+          ) : null}
+
+          {children}
+
+          {erreur ? (
+            <ThemedText type="small" themeColor="danger">
+              {erreur}
+            </ThemedText>
+          ) : null}
+
+          <ThemedView style={styles.popupFooter}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onFermer}>
+              <ThemedText type="link">Annuler</ThemedText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={labelValider}
+              disabled={enregistrement}
+              onPress={onValider}
+            >
+              <ThemedView type="backgroundSelected" style={styles.popupValiderButton}>
+                <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : labelValider}</ThemedText>
+              </ThemedView>
+            </Pressable>
+          </ThemedView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // Reste local à cet écran (non exporté) plutôt que déplacé dans
 // src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
 // par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
@@ -406,57 +493,44 @@ function ActionsMenuButton({
   disabled?: boolean;
   actions: ActionMenuItem[];
 }) {
+  const theme = useTheme();
+
   const ouvrirActions = () => {
     Alert.alert(title, message, alertActions(actions));
   };
 
   return (
-    <ThemedView style={styles.actionsMenuButtonRow}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        disabled={disabled}
-        hitSlop={Spacing.two}
-        onPress={ouvrirActions}
-      >
-        <ThemedText type="title" style={styles.kebabGlyph}>
-          ⋮
-        </ThemedText>
-      </Pressable>
-    </ThemedView>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      disabled={disabled}
+      onPress={ouvrirActions}
+      style={styles.actionsMenuButton}
+    >
+      <KebabIcon color={theme.text} />
+    </Pressable>
   );
 }
 
-// Boutons Annuler/Enregistrer partagés entre les lignes niveau 2 et niveau 3
-// en édition.
-function LigneActionsEdition({
-  labelAnnuler,
-  labelEnregistrer,
-  enregistrement,
-  onAnnuler,
-  onEnregistrer,
-}: {
-  labelAnnuler: string;
-  labelEnregistrer: string;
-  enregistrement: boolean;
-  onAnnuler: () => void;
-  onEnregistrer: () => void;
-}) {
-  return (
-    <ThemedView style={styles.typeRowActions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={labelAnnuler} onPress={onAnnuler}>
-        <ThemedText type="link">Annuler</ThemedText>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={labelEnregistrer}
-        disabled={enregistrement}
-        onPress={onEnregistrer}
-      >
-        <ThemedText type="link">{enregistrement ? 'Enregistrement…' : 'Enregistrer'}</ThemedText>
-      </Pressable>
-    </ThemedView>
-  );
+// Validation de la popup d'ajout niveau 3 (ticket #41) : réutilise
+// `validateTypeDepenseNiveau3Form` (libellé + niveau2Id) et y ajoute le
+// caractère obligatoire du montant — optionnel dans ce validateur partagé
+// car aussi utilisé en édition, où un champ vide signifie « pas de
+// changement » (voir sa doc). Ici, contrairement à l'ancien formulaire
+// d'ajout toujours visible, la popup a 2 champs (Nom, Montant) : la ligne
+// créée doit avoir un montant dès sa création.
+function validerAjoutNiveau3(values: {
+  libelle: string;
+  niveau2Id: number;
+  montant: string;
+}): TypeDepenseNiveau3FormErrors {
+  const errors = validateTypeDepenseNiveau3Form(values);
+
+  if (values.montant.trim().length === 0) {
+    errors.montant = 'Le montant est obligatoire.';
+  }
+
+  return errors;
 }
 
 function DepensesTab({ compteId }: { compteId: number }) {
@@ -480,257 +554,181 @@ function DepensesTab({ compteId }: { compteId: number }) {
 
   return (
     <ThemedView style={styles.section}>
-      <Niveau1Table
-        titre="Fixe"
+      <Niveau1Pave
+        compteId={compteId}
+        niveau1="fixe"
+        titre={LIBELLE_NIVEAU1.fixe}
         types={typesFixe}
         total={sommeNiveau1(typesFixe)}
         montantsParType3={montantsParType3}
         sommeParNiveau2={sommeParNiveau2}
       />
-      <Niveau1Table
-        titre="Variable"
+      <Niveau1Pave
+        compteId={compteId}
+        niveau1="variable"
+        titre={LIBELLE_NIVEAU1.variable}
         types={typesVariable}
         total={sommeNiveau1(typesVariable)}
         montantsParType3={montantsParType3}
         sommeParNiveau2={sommeParNiveau2}
       />
-      <AjoutTypeNiveau2Form compteId={compteId} />
-      <AjoutTypeNiveau3Form typesNiveau2={types} />
     </ThemedView>
   );
 }
 
-function Niveau1Table({
+// Pavé niveau 1 (Fixe/Variable), maquette « A — Compact » (ticket #41) : non
+// éditable, collapsable en cliquant sur le libellé (ouvert par défaut — le
+// plus proche du comportement de l'écran précédent, où les types niveau 2
+// étaient toujours visibles), somme + bouton « + » (popup 1 champ Nom)
+// toujours affichés sur l'en-tête, y compris replié.
+function Niveau1Pave({
+  compteId,
+  niveau1,
   titre,
   types,
   total,
   montantsParType3,
   sommeParNiveau2,
 }: {
+  compteId: number;
+  niveau1: Niveau1;
   titre: string;
   types: TypeDepenseNiveau2[];
   total: number;
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
 }) {
-  return (
-    <ThemedView style={styles.niveau1Table}>
-      <ThemedText type="smallBold">{titre}</ThemedText>
-
-      {types.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Aucun type « {titre} » pour l’instant.
-        </ThemedText>
-      ) : (
-        <ThemedView style={styles.typesList}>
-          {types.map((type) => (
-            <Niveau2RowCollapsible
-              key={type.id}
-              item={type}
-              montantsParType3={montantsParType3}
-              sommeParNiveau2={sommeParNiveau2}
-            />
-          ))}
-        </ThemedView>
-      )}
-
-      <ThemedView style={styles.totalRow}>
-        <ThemedText type="small" themeColor="textSecondary">
-          Total {titre}
-        </ThemedText>
-        <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
-      </ThemedView>
-    </ThemedView>
-  );
-}
-
-function AjoutTypeNiveau2Form({ compteId }: { compteId: number }) {
   const theme = useTheme();
+  const [ouvert, setOuvert] = useState(true);
+  const [popupOuvert, setPopupOuvert] = useState(false);
   const [libelle, setLibelle] = useState('');
-  const [niveau1, setNiveau1] = useState<Niveau1 | null>(null);
   const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
-  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const fermerPopup = () => {
+    setPopupOuvert(false);
+    setLibelle('');
+    setErrors({});
+    setErreur(null);
+  };
 
   const handleAjouter = async () => {
     const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1 });
     setErrors(erreursValidation);
 
-    if (Object.keys(erreursValidation).length > 0 || niveau1 === null) {
+    if (Object.keys(erreursValidation).length > 0) {
       return;
     }
 
-    setErreurEnregistrement(null);
+    setErreur(null);
     setEnregistrement(true);
     try {
       await createTypeDepenseNiveau2(compteId, libelle.trim(), niveau1);
-      setLibelle('');
-      setNiveau1(null);
+      // La nouvelle ligne niveau 2 doit être visible immédiatement (voir
+      // spec du ticket) : on ouvre le pavé même s'il avait été replié avant
+      // l'ajout.
+      setOuvert(true);
+      fermerPopup();
     } catch {
-      setErreurEnregistrement('L’ajout a échoué, réessayez.');
+      setErreur('L’ajout a échoué, réessayez.');
     } finally {
       setEnregistrement(false);
     }
   };
 
   return (
-    <ThemedView style={styles.ajoutForm}>
-      <ThemedText type="smallBold">Ajouter un type de dépense</ThemedText>
+    <ThemedView type="backgroundElement" style={styles.pave}>
+      <ThemedView style={styles.paveHeader}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le pavé ${titre}`}
+          onPress={() => setOuvert((valeur) => !valeur)}
+          style={styles.paveHeaderLabel}
+        >
+          <ChevronIcon color={theme.text} open={ouvert} />
+          <ThemedText type="smallBold">{titre}</ThemedText>
+        </Pressable>
 
-      <TextInput
-        value={libelle}
-        onChangeText={setLibelle}
-        placeholder="Ex. Maison"
-        placeholderTextColor={theme.textSecondary}
-        accessibilityLabel="Libellé du nouveau type de dépense"
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-      />
-      {errors.libelle ? (
-        <ThemedText type="small" themeColor="danger">
-          {errors.libelle}
-        </ThemedText>
-      ) : null}
-
-      <Niveau1Selector
-        valeur={niveau1}
-        onChanger={setNiveau1}
-        accessibilityLabelPrefix="Nouveau type de dépense"
-      />
-      {errors.niveau1 ? (
-        <ThemedText type="small" themeColor="danger">
-          {errors.niveau1}
-        </ThemedText>
-      ) : null}
-
-      {erreurEnregistrement ? (
-        <ThemedText type="small" themeColor="danger">
-          {erreurEnregistrement}
-        </ThemedText>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Ajouter un type de dépense"
-        disabled={enregistrement}
-        onPress={handleAjouter}
-      >
-        <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
-        </ThemedView>
-      </Pressable>
-    </ThemedView>
-  );
-}
-
-function AjoutTypeNiveau3Form({ typesNiveau2 }: { typesNiveau2: TypeDepenseNiveau2[] }) {
-  const theme = useTheme();
-  const [libelle, setLibelle] = useState('');
-  const [niveau2Id, setNiveau2Id] = useState<number | null>(null);
-  const [errors, setErrors] = useState<TypeDepenseNiveau3FormErrors>({});
-  const [enregistrement, setEnregistrement] = useState(false);
-  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
-
-  // Si le parent sélectionné a été supprimé entre-temps, on ne le considère plus comme
-  // sélectionné : évite de soumettre un niveau2Id devenu inexistant en base.
-  const selectedNiveau2Id = typesNiveau2.some((type2) => type2.id === niveau2Id) ? niveau2Id : null;
-
-  const handleAjouter = async () => {
-    const erreursValidation = validateTypeDepenseNiveau3Form({
-      libelle,
-      niveau2Id: selectedNiveau2Id,
-    });
-    setErrors(erreursValidation);
-
-    if (Object.keys(erreursValidation).length > 0 || selectedNiveau2Id === null) {
-      return;
-    }
-
-    setErreurEnregistrement(null);
-    setEnregistrement(true);
-    try {
-      await createTypeDepenseNiveau3(selectedNiveau2Id, libelle.trim());
-      setLibelle('');
-      setNiveau2Id(null);
-    } catch {
-      setErreurEnregistrement('L’ajout a échoué, réessayez.');
-    } finally {
-      setEnregistrement(false);
-    }
-  };
-
-  if (typesNiveau2.length === 0) {
-    return (
-      <ThemedView style={styles.ajoutForm}>
-        <ThemedText type="smallBold">Ajouter une ligne</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Créez d’abord un type de dépense ci-dessus.
-        </ThemedText>
-      </ThemedView>
-    );
-  }
-
-  return (
-    <ThemedView style={styles.ajoutForm}>
-      <ThemedText type="smallBold">Ajouter une ligne</ThemedText>
-
-      <ThemedView style={styles.niveau2SelectorRow}>
-        {typesNiveau2.map((type2) => (
+        <ThemedView style={styles.paveHeaderRight}>
+          <ThemedText type="smallBold" style={styles.tabularNums}>
+            {formatCentimesEnEuros(total)}
+          </ThemedText>
           <Pressable
-            key={type2.id}
             accessibilityRole="button"
-            accessibilityLabel={`Type de dépense parent : ${type2.libelle} (${LIBELLE_NIVEAU1[type2.niveau1]})`}
-            onPress={() => setNiveau2Id(type2.id)}
+            accessibilityLabel={`Ajouter un type de dépense — ${titre}`}
+            onPress={() => setPopupOuvert(true)}
           >
-            <ThemedView
-              type={selectedNiveau2Id === type2.id ? 'backgroundSelected' : 'backgroundElement'}
-              style={styles.niveau2Chip}
-            >
-              <ThemedText type="small">{type2.libelle}</ThemedText>
+            <ThemedView type="backgroundSelected" style={styles.paveAjoutButton}>
+              <PlusIcon color={theme.text} />
             </ThemedView>
           </Pressable>
-        ))}
-      </ThemedView>
-      {errors.niveau2Id ? (
-        <ThemedText type="small" themeColor="danger">
-          {errors.niveau2Id}
-        </ThemedText>
-      ) : null}
-
-      <TextInput
-        value={libelle}
-        onChangeText={setLibelle}
-        placeholder="Ex. Crédit immobilier"
-        placeholderTextColor={theme.textSecondary}
-        accessibilityLabel="Libellé de la nouvelle ligne"
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-      />
-      {errors.libelle ? (
-        <ThemedText type="small" themeColor="danger">
-          {errors.libelle}
-        </ThemedText>
-      ) : null}
-
-      {erreurEnregistrement ? (
-        <ThemedText type="small" themeColor="danger">
-          {erreurEnregistrement}
-        </ThemedText>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Ajouter une ligne"
-        disabled={enregistrement}
-        onPress={handleAjouter}
-      >
-        <ThemedView type="backgroundElement" style={styles.submitButton}>
-          <ThemedText type="smallBold">{enregistrement ? 'Ajout…' : 'Ajouter'}</ThemedText>
         </ThemedView>
-      </Pressable>
+      </ThemedView>
+
+      {ouvert ? (
+        types.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Aucun type « {titre} » pour l’instant.
+          </ThemedText>
+        ) : (
+          <ThemedView style={styles.typesList}>
+            {types.map((type) => (
+              <Niveau2Ligne
+                key={type.id}
+                item={type}
+                montantsParType3={montantsParType3}
+                sommeParNiveau2={sommeParNiveau2}
+              />
+            ))}
+          </ThemedView>
+        )
+      ) : null}
+
+      <AjoutPopup
+        visible={popupOuvert}
+        titre="Ajouter un type de dépense"
+        sousTitre={titre}
+        labelValider="Ajouter"
+        enregistrement={enregistrement}
+        erreur={erreur}
+        onFermer={fermerPopup}
+        onValider={handleAjouter}
+      >
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Nom
+          </ThemedText>
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            placeholder="Ex. Maison"
+            placeholderTextColor={theme.textSecondary}
+            accessibilityLabel="Nom du nouveau type de dépense"
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+      </AjoutPopup>
     </ThemedView>
   );
 }
 
-function Niveau2RowCollapsible({
+// Ligne niveau 2, maquette « A — Compact » (ticket #41) : carte imbriquée
+// dans le pavé niveau 1, collapsable (repliée par défaut, comme l'ancien
+// Niveau2RowCollapsible), somme du couple niveau1/niveau2 + bouton « + »
+// (popup 2 champs Nom/Montant) sur l'en-tête. Le menu « ⋮ » (Modifier/
+// Supprimer) est conservé — absent du texte de la spec pixel mais retenu à
+// la demande du développeur pour ne pas perdre cette fonctionnalité.
+// « Modifier » ouvre une popup (AjoutPopup, même style que l'ajout) plutôt
+// qu'une édition inline dans la ligne : homogénéité demandée après coup par
+// le développeur (édition inline d'origine jugée non cohérente avec le
+// style des popups d'ajout du ticket #41).
+function Niveau2Ligne({
   item,
   montantsParType3,
   sommeParNiveau2,
@@ -753,6 +751,15 @@ function Niveau2RowCollapsible({
   const [suppression, setSuppression] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const libelleAccessible = `${item.libelle} (#${item.id})`;
+
+  // État de la popup d'ajout d'une ligne niveau 3, indépendant de l'état
+  // d'édition/suppression ci-dessus.
+  const [ajoutOuvert, setAjoutOuvert] = useState(false);
+  const [ajoutLibelle, setAjoutLibelle] = useState('');
+  const [ajoutMontant, setAjoutMontant] = useState('');
+  const [ajoutErrors, setAjoutErrors] = useState<TypeDepenseNiveau3FormErrors>({});
+  const [ajoutEnregistrement, setAjoutEnregistrement] = useState(false);
+  const [ajoutErreur, setAjoutErreur] = useState<string | null>(null);
 
   const handleAnnuler = () => {
     setLibelle(item.libelle);
@@ -811,49 +818,49 @@ function Niveau2RowCollapsible({
     );
   };
 
+  const fermerAjout = () => {
+    setAjoutOuvert(false);
+    setAjoutLibelle('');
+    setAjoutMontant('');
+    setAjoutErrors({});
+    setAjoutErreur(null);
+  };
+
+  const handleAjouterNiveau3 = async () => {
+    const erreursValidation = validerAjoutNiveau3({
+      libelle: ajoutLibelle,
+      niveau2Id: item.id,
+      montant: ajoutMontant,
+    });
+    setAjoutErrors(erreursValidation);
+
+    const montantEnCentimes = parseMontantEnCentimes(ajoutMontant);
+    if (Object.keys(erreursValidation).length > 0 || montantEnCentimes === null) {
+      return;
+    }
+
+    setAjoutErreur(null);
+    setAjoutEnregistrement(true);
+    try {
+      const [ligneCreee] = await createTypeDepenseNiveau3(item.id, ajoutLibelle.trim());
+      await setMontantDepenseNiveau3(ligneCreee.id, moisCourant(), montantEnCentimes);
+      // La nouvelle ligne niveau 3 doit apparaître immédiatement (voir spec
+      // du ticket) : on déplie la ligne niveau 2 même si elle était repliée
+      // avant l'ajout.
+      setOuvert(true);
+      setAEteOuvert(true);
+      fermerAjout();
+    } catch {
+      setAjoutErreur('L’ajout a échoué, réessayez.');
+    } finally {
+      setAjoutEnregistrement(false);
+    }
+  };
+
   return (
     <>
-      {edition ? (
-        <ThemedView type="backgroundElement" style={styles.typeRow}>
-          <TextInput
-            value={libelle}
-            onChangeText={setLibelle}
-            accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
-            style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-          />
-          {errors.libelle ? (
-            <ThemedText type="small" themeColor="danger">
-              {errors.libelle}
-            </ThemedText>
-          ) : null}
-
-          <Niveau1Selector
-            valeur={niveau1}
-            onChanger={setNiveau1}
-            accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
-          />
-          {errors.niveau1 ? (
-            <ThemedText type="small" themeColor="danger">
-              {errors.niveau1}
-            </ThemedText>
-          ) : null}
-
-          {erreur ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreur}
-            </ThemedText>
-          ) : null}
-
-          <LigneActionsEdition
-            labelAnnuler={`Annuler la modification du type de dépense ${libelleAccessible}`}
-            labelEnregistrer={`Enregistrer le type de dépense ${libelleAccessible}`}
-            enregistrement={enregistrement}
-            onAnnuler={handleAnnuler}
-            onEnregistrer={handleEnregistrer}
-          />
-        </ThemedView>
-      ) : (
-        <ThemedView type="backgroundElement" style={styles.typeRow}>
+      <ThemedView style={styles.niveau2Card}>
+        <ThemedView style={styles.niveau2Header}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
@@ -861,60 +868,159 @@ function Niveau2RowCollapsible({
               setOuvert((valeur) => !valeur);
               setAEteOuvert(true);
             }}
-            style={styles.typeRowHeader}
+            style={styles.niveau2HeaderLabel}
           >
-            <ThemedText type="smallBold">
-              {ouvert ? '▾' : '▸'} {item.libelle}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {LIBELLE_NIVEAU1[item.niveau1]}
-            </ThemedText>
+            <ChevronIcon color={theme.text} open={ouvert} size={14} />
+            <ThemedText type="smallBold">{item.libelle}</ThemedText>
           </Pressable>
 
-          {erreur ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreur}
+          <ThemedView style={styles.niveau2HeaderRight}>
+            <ThemedText type="small" style={styles.tabularNums}>
+              {formatCentimesEnEuros(sommeParNiveau2.get(item.id) ?? 0)}
             </ThemedText>
-          ) : null}
-
-          <ActionsMenuButton
-            accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
-            title={item.libelle}
-            disabled={suppression}
-            actions={[
-              { label: 'Modifier', onPress: () => setEdition(true) },
-              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-            ]}
-          />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Ajouter une ligne — ${item.libelle}`}
+              style={styles.niveau2AjoutButton}
+              onPress={() => setAjoutOuvert(true)}
+            >
+              <PlusIcon color={theme.textSecondary} />
+            </Pressable>
+            <ActionsMenuButton
+              accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
+              title={item.libelle}
+              disabled={suppression}
+              actions={[
+                { label: 'Modifier', onPress: () => setEdition(true) },
+                { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+              ]}
+            />
+          </ThemedView>
         </ThemedView>
-      )}
+
+        {/* Erreur de suppression uniquement : l'erreur d'enregistrement d'une
+            modification s'affiche dans la popup Modifier ci-dessous (edition
+            true pendant la sauvegarde), pas ici — éviter de l'afficher deux
+            fois au même moment. */}
+        {!edition && erreur ? (
+          <ThemedText type="small" themeColor="danger">
+            {erreur}
+          </ThemedText>
+        ) : null}
+      </ThemedView>
 
       {aEteOuvert ? (
         <Niveau3Liste
           niveau2Id={item.id}
-          niveau1Parent={item.niveau1}
           masque={!ouvert}
           montantsParType3={montantsParType3}
-          total={sommeParNiveau2.get(item.id) ?? 0}
+          contexte={`${item.libelle} · ${LIBELLE_NIVEAU1[item.niveau1]}`}
         />
       ) : null}
+
+      <AjoutPopup
+        visible={edition}
+        titre="Modifier le type de dépense"
+        sousTitre={LIBELLE_NIVEAU1[item.niveau1]}
+        labelValider="Enregistrer"
+        enregistrement={enregistrement}
+        erreur={erreur}
+        onFermer={handleAnnuler}
+        onValider={handleEnregistrer}
+      >
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Nom
+          </ThemedText>
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+        />
+        {errors.niveau1 ? (
+          <ThemedText type="small" themeColor="danger">
+            {errors.niveau1}
+          </ThemedText>
+        ) : null}
+      </AjoutPopup>
+
+      <AjoutPopup
+        visible={ajoutOuvert}
+        titre="Ajouter une ligne"
+        sousTitre={`${item.libelle} · ${LIBELLE_NIVEAU1[item.niveau1]}`}
+        labelValider="Ajouter"
+        enregistrement={ajoutEnregistrement}
+        erreur={ajoutErreur}
+        onFermer={fermerAjout}
+        onValider={handleAjouterNiveau3}
+      >
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Nom
+          </ThemedText>
+          <TextInput
+            value={ajoutLibelle}
+            onChangeText={setAjoutLibelle}
+            placeholder="Ex. Crédit immobilier"
+            placeholderTextColor={theme.textSecondary}
+            accessibilityLabel="Nom de la nouvelle ligne"
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {ajoutErrors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {ajoutErrors.libelle}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Montant
+          </ThemedText>
+          <TextInput
+            value={ajoutMontant}
+            onChangeText={setAjoutMontant}
+            placeholder="Ex. 1500"
+            placeholderTextColor={theme.textSecondary}
+            keyboardType="decimal-pad"
+            accessibilityLabel="Montant de la nouvelle ligne"
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {ajoutErrors.montant ? (
+            <ThemedText type="small" themeColor="danger">
+              {ajoutErrors.montant}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+      </AjoutPopup>
     </>
   );
 }
 
 function Niveau3Liste({
   niveau2Id,
-  niveau1Parent,
   masque,
   montantsParType3,
-  total,
+  contexte,
 }: {
   niveau2Id: number;
-  niveau1Parent: Niveau1;
   masque: boolean;
   montantsParType3: MontantsParType3;
-  /** Somme des montants résolus des lignes de ce niveau 2 (voir DepensesTab). */
-  total: number;
+  /** Sous-titre contextuel des popups « Modifier » (ex. « Logement · Fixe »), voir Niveau2Ligne. */
+  contexte: string;
 }) {
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
 
@@ -925,25 +1031,15 @@ function Niveau3Liste({
           Aucune ligne pour l’instant.
         </ThemedText>
       ) : (
-        <>
-          <ThemedView style={styles.typesList}>
-            {sousTypes.map((sousType) => (
-              <TypeDepenseNiveau3Row
-                key={sousType.id}
-                item={sousType}
-                niveau1Parent={niveau1Parent}
-                montant={montantsParType3.get(sousType.id) ?? null}
-              />
-            ))}
-          </ThemedView>
-
-          <ThemedView style={styles.totalRow}>
-            <ThemedText type="small" themeColor="textSecondary">
-              Total
-            </ThemedText>
-            <ThemedText type="smallBold">{formatCentimesEnEuros(total)}</ThemedText>
-          </ThemedView>
-        </>
+        sousTypes.map((sousType, index) => (
+          <TypeDepenseNiveau3Row
+            key={sousType.id}
+            item={sousType}
+            montant={montantsParType3.get(sousType.id) ?? null}
+            premiere={index === 0}
+            contexte={contexte}
+          />
+        ))
       )}
     </ThemedView>
   );
@@ -951,13 +1047,17 @@ function Niveau3Liste({
 
 function TypeDepenseNiveau3Row({
   item,
-  niveau1Parent,
   montant,
+  premiere,
+  contexte,
 }: {
   item: TypeDepenseNiveau3;
-  niveau1Parent: Niveau1;
   /** Montant résolu au mois courant (voir DepensesTab), `null` = absente ce mois. */
   montant: number | null;
+  /** Première ligne de la liste : pas de séparateur au-dessus (voir Niveau3Liste). */
+  premiere: boolean;
+  /** Sous-titre contextuel de la popup « Modifier » (ex. « Logement · Fixe »). */
+  contexte: string;
 }) {
   const theme = useTheme();
   const [edition, setEdition] = useState(false);
@@ -1094,107 +1194,118 @@ function TypeDepenseNiveau3Row({
     );
   };
 
-  if (edition) {
-    return (
-      <ThemedView type="backgroundElement" style={styles.niveau3Row}>
-        <TextInput
-          value={libelle}
-          onChangeText={setLibelle}
-          accessibilityLabel={`Libellé de la ligne ${libelleAccessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.libelle ? (
-          <ThemedText type="small" themeColor="danger">
-            {errors.libelle}
+  return (
+    <>
+      <ThemedView
+        style={[
+          styles.niveau3Row,
+          premiere ? undefined : { borderTopWidth: 1, borderTopColor: theme.backgroundElement },
+        ]}
+      >
+        <ThemedView style={styles.niveau3RowMain}>
+          <ThemedText type="small" style={styles.niveau3Libelle}>
+            {item.libelle}
           </ThemedText>
-        ) : null}
+          {montant === null ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Absente ce mois
+            </ThemedText>
+          ) : (
+            <ThemedText type="small" style={styles.tabularNums}>
+              {formatCentimesEnEuros(montant)}
+            </ThemedText>
+          )}
 
-        <TextInput
-          value={montantSaisie}
-          onChangeText={setMontantSaisie}
-          placeholder="Ex. 1500"
-          placeholderTextColor={theme.textSecondary}
-          keyboardType="decimal-pad"
-          accessibilityLabel={`Montant de la ligne ${libelleAccessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.montant ? (
-          <ThemedText type="small" themeColor="danger">
-            {errors.montant}
-          </ThemedText>
-        ) : null}
+          <ActionsMenuButton
+            accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
+            title={item.libelle}
+            // Alert.alert ne permet pas de désactiver une entrée individuellement
+            // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
+            // que par `suppression`, comme sur les lignes niveau 2, plutôt que
+            // d'y ajouter `enregistrement` — sinon « Modifier » redevient
+            // injoignable pendant l'enregistrement de « Marquer absente », alors
+            // que ça a toujours été possible (seules « Marquer absente » et
+            // « Supprimer » étaient gérées par ces deux états avant l'introduction
+            // de ce menu unique, voir #26).
+            disabled={suppression}
+            actions={[
+              {
+                label: 'Modifier',
+                onPress: () => {
+                  // Initialisé ici plutôt qu'au montage : `montant` provient
+                  // d'une requête compte-wide (DepensesTab) qui peut ne pas
+                  // avoir encore résolu quand cette ligne apparaît — on lit sa
+                  // valeur la plus récente au moment où l'utilisateur ouvre
+                  // effectivement l'édition.
+                  setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
+                  setEdition(true);
+                },
+              },
+              ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
+              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+            ]}
+          />
+        </ThemedView>
 
-        {erreur ? (
+        {/* Erreur de suppression/« Marquer absente » uniquement : l'erreur
+            d'enregistrement d'une modification s'affiche dans la popup
+            Modifier ci-dessous (edition true pendant la sauvegarde), pas ici
+            — éviter de l'afficher deux fois au même moment. */}
+        {!edition && erreur ? (
           <ThemedText type="small" themeColor="danger">
             {erreur}
           </ThemedText>
         ) : null}
-
-        <LigneActionsEdition
-          labelAnnuler={`Annuler la modification de la ligne ${libelleAccessible}`}
-          labelEnregistrer={`Enregistrer la ligne ${libelleAccessible}`}
-          enregistrement={enregistrement}
-          onAnnuler={handleAnnuler}
-          onEnregistrer={handleEnregistrer}
-        />
       </ThemedView>
-    );
-  }
 
-  return (
-    <ThemedView type="backgroundElement" style={styles.niveau3Row}>
-      <ThemedView style={styles.niveau3RowHeader}>
-        <ThemedView style={styles.typeRowInfo}>
-          <ThemedText type="small">{item.libelle}</ThemedText>
+      <AjoutPopup
+        visible={edition}
+        titre="Modifier la ligne"
+        sousTitre={contexte}
+        labelValider="Enregistrer"
+        enregistrement={enregistrement}
+        erreur={erreur}
+        onFermer={handleAnnuler}
+        onValider={handleEnregistrer}
+      >
+        <ThemedView style={styles.field}>
           <ThemedText type="small" themeColor="textSecondary">
-            {LIBELLE_NIVEAU1[niveau1Parent]} (hérité)
+            Nom
           </ThemedText>
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            accessibilityLabel={`Libellé de la ligne ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
         </ThemedView>
-        {montant === null ? (
+
+        <ThemedView style={styles.field}>
           <ThemedText type="small" themeColor="textSecondary">
-            Absente ce mois
+            Montant
           </ThemedText>
-        ) : (
-          <ThemedText type="small">{formatCentimesEnEuros(montant)}</ThemedText>
-        )}
-      </ThemedView>
-
-      {erreur ? (
-        <ThemedText type="small" themeColor="danger">
-          {erreur}
-        </ThemedText>
-      ) : null}
-
-      <ActionsMenuButton
-        accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
-        title={item.libelle}
-        // Alert.alert ne permet pas de désactiver une entrée individuellement
-        // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
-        // que par `suppression`, comme sur les lignes niveau 2, plutôt que
-        // d'y ajouter `enregistrement` — sinon « Modifier » redevient
-        // injoignable pendant l'enregistrement de « Marquer absente », alors
-        // que ça a toujours été possible (seules « Marquer absente » et
-        // « Supprimer » étaient gérées par ces deux états avant l'introduction
-        // de ce menu unique, voir #26).
-        disabled={suppression}
-        actions={[
-          {
-            label: 'Modifier',
-            onPress: () => {
-              // Initialisé ici plutôt qu'au montage : `montant` provient
-              // d'une requête compte-wide (DepensesTab) qui peut ne pas
-              // avoir encore résolu quand cette ligne apparaît — on lit sa
-              // valeur la plus récente au moment où l'utilisateur ouvre
-              // effectivement l'édition.
-              setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
-              setEdition(true);
-            },
-          },
-          ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
-          { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-        ]}
-      />
-    </ThemedView>
+          <TextInput
+            value={montantSaisie}
+            onChangeText={setMontantSaisie}
+            placeholder="Ex. 1500"
+            placeholderTextColor={theme.textSecondary}
+            keyboardType="decimal-pad"
+            accessibilityLabel={`Montant de la ligne ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.montant ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.montant}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+      </AjoutPopup>
+    </>
   );
 }
 
@@ -1645,35 +1756,50 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
   },
-  niveau1Table: {
+  // Pavé niveau 1 (Fixe/Variable) — maquette « A — Compact » (ticket #41).
+  pave: {
     gap: Spacing.two,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  paveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  paveHeaderLabel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  paveHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  paveAjoutButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // `fontVariant: ['tabular-nums']` : chiffres à chasse fixe sur les sommes
+  // (pavé, ligne niveau 2, ligne niveau 3), pour qu'elles ne « sautent » pas
+  // visuellement quand le montant change (voir maquette A).
+  tabularNums: {
+    fontVariant: ['tabular-nums'],
   },
   typesList: {
     gap: Spacing.two,
   },
-  typeRow: {
-    gap: Spacing.one,
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-  },
-  typeRowHeader: {
-    gap: Spacing.half,
-  },
-  typeRowInfo: {
-    gap: Spacing.half,
-  },
-  // Utilisé uniquement par LigneActionsEdition (2 boutons Annuler/Enregistrer,
-  // espacés). ActionsMenuButton porte son propre style d'alignement
-  // (actionsMenuButtonRow) — ne pas réutiliser ce style-ci pour lui, voir le
-  // bug corrigé en review #26 (les deux partageaient ce style, l'un des deux
-  // en pâtissait à chaque changement de l'autre).
-  typeRowActions: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  actionsMenuButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+  actionsMenuButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   totalRow: {
     flexDirection: 'row',
@@ -1695,29 +1821,82 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
   },
-  niveau2SelectorRow: {
+  // Ligne niveau 2 — carte imbriquée dans le pavé niveau 1 (ticket #41).
+  niveau2Card: {
+    gap: Spacing.one,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  niveau2Header: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  niveau2HeaderLabel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  niveau2HeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.one,
   },
-  niveau2Chip: {
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+  niveau2AjoutButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   niveau3Section: {
-    gap: Spacing.two,
-    paddingLeft: Spacing.three,
     paddingTop: Spacing.one,
   },
+  // Ligne niveau 3 en consultation : pas de fond de carte (juste un
+  // séparateur fin entre lignes, posé au cas par cas via `premiere`, voir
+  // TypeDepenseNiveau3Row) — contrairement au mode édition ci-dessous.
   niveau3Row: {
-    gap: Spacing.one,
-    borderRadius: Spacing.two,
-    padding: Spacing.two,
+    paddingLeft: Spacing.three,
   },
-  niveau3RowHeader: {
+  niveau3RowMain: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+  },
+  niveau3Libelle: {
+    flex: 1,
+  },
+  // Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant ») et popups
+  // « Modifier » (même composant AjoutPopup, ticket #41 — l'édition inline
+  // d'origine des lignes niveau 2/niveau 3 a été remplacée par ces popups
+  // pour rester homogène avec le style des popups d'ajout) — voir
+  // docs/design/charte-graphique.md § Popups d'ajout.
+  popupOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  popupCard: {
+    width: '100%',
+    maxWidth: 400,
+    gap: Spacing.three,
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+  },
+  popupFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.four,
+  },
+  popupValiderButton: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
   },
   anneeSelectorRow: {
     flexDirection: 'row',
@@ -1751,9 +1930,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  kebabGlyph: {
-    fontSize: 20,
-    lineHeight: 20,
   },
 });

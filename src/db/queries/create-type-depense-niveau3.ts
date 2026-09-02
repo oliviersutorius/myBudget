@@ -7,7 +7,15 @@ import { typesDepenseNiveau3 } from '@/db/schema';
  * obligatoire) est portée par `validate-type-depense-niveau3-form.ts`,
  * testée séparément. Pas de niveau1 ici : il est hérité du niveau 2 parent
  * (voir docs/DOMAIN.md §3.2).
+ *
+ * `.returning()` l'id inséré : la popup d'ajout niveau 3 (ticket #41) pose
+ * le montant du mois courant juste après la création
+ * (`setMontantDepenseNiveau3`), elle a donc besoin de l'id sans requête
+ * séparée.
  */
 export function createTypeDepenseNiveau3(niveau2Id: number, libelle: string) {
-  return db.insert(typesDepenseNiveau3).values({ niveau2Id, libelle });
+  return db
+    .insert(typesDepenseNiveau3)
+    .values({ niveau2Id, libelle })
+    .returning({ id: typesDepenseNiveau3.id });
 }
