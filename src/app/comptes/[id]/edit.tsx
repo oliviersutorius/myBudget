@@ -512,38 +512,6 @@ function ActionsMenuButton({
   );
 }
 
-// Boutons Annuler/Enregistrer partagés entre les lignes niveau 2 et niveau 3
-// en édition.
-function LigneActionsEdition({
-  labelAnnuler,
-  labelEnregistrer,
-  enregistrement,
-  onAnnuler,
-  onEnregistrer,
-}: {
-  labelAnnuler: string;
-  labelEnregistrer: string;
-  enregistrement: boolean;
-  onAnnuler: () => void;
-  onEnregistrer: () => void;
-}) {
-  return (
-    <ThemedView style={styles.typeRowActions}>
-      <Pressable accessibilityRole="button" accessibilityLabel={labelAnnuler} onPress={onAnnuler}>
-        <ThemedText type="link">Annuler</ThemedText>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={labelEnregistrer}
-        disabled={enregistrement}
-        onPress={onEnregistrer}
-      >
-        <ThemedText type="link">{enregistrement ? 'Enregistrement…' : 'Enregistrer'}</ThemedText>
-      </Pressable>
-    </ThemedView>
-  );
-}
-
 // Validation de la popup d'ajout niveau 3 (ticket #41) : réutilise
 // `validateTypeDepenseNiveau3Form` (libellé + niveau2Id) et y ajoute le
 // caractère obligatoire du montant — optionnel dans ce validateur partagé
@@ -754,9 +722,12 @@ function Niveau1Pave({
 // dans le pavé niveau 1, collapsable (repliée par défaut, comme l'ancien
 // Niveau2RowCollapsible), somme du couple niveau1/niveau2 + bouton « + »
 // (popup 2 champs Nom/Montant) sur l'en-tête. Le menu « ⋮ » (Modifier/
-// Supprimer, mode édition inline) est conservé à l'identique de l'écran
-// précédent — absent du texte de la spec pixel mais retenu à la demande du
-// développeur pour ne pas perdre cette fonctionnalité.
+// Supprimer) est conservé — absent du texte de la spec pixel mais retenu à
+// la demande du développeur pour ne pas perdre cette fonctionnalité.
+// « Modifier » ouvre une popup (AjoutPopup, même style que l'ajout) plutôt
+// qu'une édition inline dans la ligne : homogénéité demandée après coup par
+// le développeur (édition inline d'origine jugée non cohérente avec le
+// style des popups d'ajout du ticket #41).
 function Niveau2Ligne({
   item,
   montantsParType3,
@@ -888,96 +859,103 @@ function Niveau2Ligne({
 
   return (
     <>
-      {edition ? (
-        <ThemedView type="backgroundElement" style={styles.typeRow}>
+      <ThemedView style={styles.niveau2Card}>
+        <ThemedView style={styles.niveau2Header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
+            onPress={() => {
+              setOuvert((valeur) => !valeur);
+              setAEteOuvert(true);
+            }}
+            style={styles.niveau2HeaderLabel}
+          >
+            <ChevronIcon color={theme.text} open={ouvert} size={14} />
+            <ThemedText type="smallBold">{item.libelle}</ThemedText>
+          </Pressable>
+
+          <ThemedView style={styles.niveau2HeaderRight}>
+            <ThemedText type="small" style={styles.tabularNums}>
+              {formatCentimesEnEuros(sommeParNiveau2.get(item.id) ?? 0)}
+            </ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Ajouter une ligne — ${item.libelle}`}
+              style={styles.niveau2AjoutButton}
+              onPress={() => setAjoutOuvert(true)}
+            >
+              <PlusIcon color={theme.textSecondary} />
+            </Pressable>
+            <ActionsMenuButton
+              accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
+              title={item.libelle}
+              disabled={suppression}
+              actions={[
+                { label: 'Modifier', onPress: () => setEdition(true) },
+                { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+              ]}
+            />
+          </ThemedView>
+        </ThemedView>
+
+        {/* Erreur de suppression uniquement : l'erreur d'enregistrement d'une
+            modification s'affiche dans la popup Modifier ci-dessous (edition
+            true pendant la sauvegarde), pas ici — éviter de l'afficher deux
+            fois au même moment. */}
+        {!edition && erreur ? (
+          <ThemedText type="small" themeColor="danger">
+            {erreur}
+          </ThemedText>
+        ) : null}
+      </ThemedView>
+
+      {aEteOuvert ? (
+        <Niveau3Liste
+          niveau2Id={item.id}
+          masque={!ouvert}
+          montantsParType3={montantsParType3}
+          contexte={`${item.libelle} · ${LIBELLE_NIVEAU1[item.niveau1]}`}
+        />
+      ) : null}
+
+      <AjoutPopup
+        visible={edition}
+        titre="Modifier le type de dépense"
+        sousTitre={LIBELLE_NIVEAU1[item.niveau1]}
+        labelValider="Enregistrer"
+        enregistrement={enregistrement}
+        erreur={erreur}
+        onFermer={handleAnnuler}
+        onValider={handleEnregistrer}
+      >
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Nom
+          </ThemedText>
           <TextInput
             value={libelle}
             onChangeText={setLibelle}
             accessibilityLabel={`Libellé du type de dépense ${libelleAccessible}`}
-            style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
           />
           {errors.libelle ? (
             <ThemedText type="small" themeColor="danger">
               {errors.libelle}
             </ThemedText>
           ) : null}
-
-          <Niveau1Selector
-            valeur={niveau1}
-            onChanger={setNiveau1}
-            accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
-          />
-          {errors.niveau1 ? (
-            <ThemedText type="small" themeColor="danger">
-              {errors.niveau1}
-            </ThemedText>
-          ) : null}
-
-          {erreur ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreur}
-            </ThemedText>
-          ) : null}
-
-          <LigneActionsEdition
-            labelAnnuler={`Annuler la modification du type de dépense ${libelleAccessible}`}
-            labelEnregistrer={`Enregistrer le type de dépense ${libelleAccessible}`}
-            enregistrement={enregistrement}
-            onAnnuler={handleAnnuler}
-            onEnregistrer={handleEnregistrer}
-          />
         </ThemedView>
-      ) : (
-        <ThemedView style={styles.niveau2Card}>
-          <ThemedView style={styles.niveau2Header}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
-              onPress={() => {
-                setOuvert((valeur) => !valeur);
-                setAEteOuvert(true);
-              }}
-              style={styles.niveau2HeaderLabel}
-            >
-              <ChevronIcon color={theme.text} open={ouvert} size={14} />
-              <ThemedText type="smallBold">{item.libelle}</ThemedText>
-            </Pressable>
 
-            <ThemedView style={styles.niveau2HeaderRight}>
-              <ThemedText type="small" style={styles.tabularNums}>
-                {formatCentimesEnEuros(sommeParNiveau2.get(item.id) ?? 0)}
-              </ThemedText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Ajouter une ligne — ${item.libelle}`}
-                style={styles.niveau2AjoutButton}
-                onPress={() => setAjoutOuvert(true)}
-              >
-                <PlusIcon color={theme.textSecondary} />
-              </Pressable>
-              <ActionsMenuButton
-                accessibilityLabel={`Actions pour le type de dépense ${libelleAccessible}`}
-                title={item.libelle}
-                disabled={suppression}
-                actions={[
-                  { label: 'Modifier', onPress: () => setEdition(true) },
-                  { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-                ]}
-              />
-            </ThemedView>
-          </ThemedView>
-
-          {erreur ? (
-            <ThemedText type="small" themeColor="danger">
-              {erreur}
-            </ThemedText>
-          ) : null}
-        </ThemedView>
-      )}
-
-      {aEteOuvert ? (
-        <Niveau3Liste niveau2Id={item.id} masque={!ouvert} montantsParType3={montantsParType3} />
-      ) : null}
+        <Niveau1Selector
+          valeur={niveau1}
+          onChanger={setNiveau1}
+          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
+        />
+        {errors.niveau1 ? (
+          <ThemedText type="small" themeColor="danger">
+            {errors.niveau1}
+          </ThemedText>
+        ) : null}
+      </AjoutPopup>
 
       <AjoutPopup
         visible={ajoutOuvert}
@@ -1036,10 +1014,13 @@ function Niveau3Liste({
   niveau2Id,
   masque,
   montantsParType3,
+  contexte,
 }: {
   niveau2Id: number;
   masque: boolean;
   montantsParType3: MontantsParType3;
+  /** Sous-titre contextuel des popups « Modifier » (ex. « Logement · Fixe »), voir Niveau2Ligne. */
+  contexte: string;
 }) {
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
 
@@ -1056,6 +1037,7 @@ function Niveau3Liste({
             item={sousType}
             montant={montantsParType3.get(sousType.id) ?? null}
             premiere={index === 0}
+            contexte={contexte}
           />
         ))
       )}
@@ -1067,12 +1049,15 @@ function TypeDepenseNiveau3Row({
   item,
   montant,
   premiere,
+  contexte,
 }: {
   item: TypeDepenseNiveau3;
   /** Montant résolu au mois courant (voir DepensesTab), `null` = absente ce mois. */
   montant: number | null;
   /** Première ligne de la liste : pas de séparateur au-dessus (voir Niveau3Liste). */
   premiere: boolean;
+  /** Sous-titre contextuel de la popup « Modifier » (ex. « Logement · Fixe »). */
+  contexte: string;
 }) {
   const theme = useTheme();
   const [edition, setEdition] = useState(false);
@@ -1209,111 +1194,118 @@ function TypeDepenseNiveau3Row({
     );
   };
 
-  if (edition) {
-    return (
-      <ThemedView type="backgroundElement" style={styles.niveau3RowEdition}>
-        <TextInput
-          value={libelle}
-          onChangeText={setLibelle}
-          accessibilityLabel={`Libellé de la ligne ${libelleAccessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.libelle ? (
-          <ThemedText type="small" themeColor="danger">
-            {errors.libelle}
+  return (
+    <>
+      <ThemedView
+        style={[
+          styles.niveau3Row,
+          premiere ? undefined : { borderTopWidth: 1, borderTopColor: theme.backgroundElement },
+        ]}
+      >
+        <ThemedView style={styles.niveau3RowMain}>
+          <ThemedText type="small" style={styles.niveau3Libelle}>
+            {item.libelle}
           </ThemedText>
-        ) : null}
+          {montant === null ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Absente ce mois
+            </ThemedText>
+          ) : (
+            <ThemedText type="small" style={styles.tabularNums}>
+              {formatCentimesEnEuros(montant)}
+            </ThemedText>
+          )}
 
-        <TextInput
-          value={montantSaisie}
-          onChangeText={setMontantSaisie}
-          placeholder="Ex. 1500"
-          placeholderTextColor={theme.textSecondary}
-          keyboardType="decimal-pad"
-          accessibilityLabel={`Montant de la ligne ${libelleAccessible}`}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
-        />
-        {errors.montant ? (
-          <ThemedText type="small" themeColor="danger">
-            {errors.montant}
-          </ThemedText>
-        ) : null}
+          <ActionsMenuButton
+            accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
+            title={item.libelle}
+            // Alert.alert ne permet pas de désactiver une entrée individuellement
+            // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
+            // que par `suppression`, comme sur les lignes niveau 2, plutôt que
+            // d'y ajouter `enregistrement` — sinon « Modifier » redevient
+            // injoignable pendant l'enregistrement de « Marquer absente », alors
+            // que ça a toujours été possible (seules « Marquer absente » et
+            // « Supprimer » étaient gérées par ces deux états avant l'introduction
+            // de ce menu unique, voir #26).
+            disabled={suppression}
+            actions={[
+              {
+                label: 'Modifier',
+                onPress: () => {
+                  // Initialisé ici plutôt qu'au montage : `montant` provient
+                  // d'une requête compte-wide (DepensesTab) qui peut ne pas
+                  // avoir encore résolu quand cette ligne apparaît — on lit sa
+                  // valeur la plus récente au moment où l'utilisateur ouvre
+                  // effectivement l'édition.
+                  setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
+                  setEdition(true);
+                },
+              },
+              ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
+              { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
+            ]}
+          />
+        </ThemedView>
 
-        {erreur ? (
+        {/* Erreur de suppression/« Marquer absente » uniquement : l'erreur
+            d'enregistrement d'une modification s'affiche dans la popup
+            Modifier ci-dessous (edition true pendant la sauvegarde), pas ici
+            — éviter de l'afficher deux fois au même moment. */}
+        {!edition && erreur ? (
           <ThemedText type="small" themeColor="danger">
             {erreur}
           </ThemedText>
         ) : null}
-
-        <LigneActionsEdition
-          labelAnnuler={`Annuler la modification de la ligne ${libelleAccessible}`}
-          labelEnregistrer={`Enregistrer la ligne ${libelleAccessible}`}
-          enregistrement={enregistrement}
-          onAnnuler={handleAnnuler}
-          onEnregistrer={handleEnregistrer}
-        />
       </ThemedView>
-    );
-  }
 
-  return (
-    <ThemedView
-      style={[
-        styles.niveau3Row,
-        premiere ? undefined : { borderTopWidth: 1, borderTopColor: theme.backgroundElement },
-      ]}
-    >
-      <ThemedView style={styles.niveau3RowMain}>
-        <ThemedText type="small" style={styles.niveau3Libelle}>
-          {item.libelle}
-        </ThemedText>
-        {montant === null ? (
+      <AjoutPopup
+        visible={edition}
+        titre="Modifier la ligne"
+        sousTitre={contexte}
+        labelValider="Enregistrer"
+        enregistrement={enregistrement}
+        erreur={erreur}
+        onFermer={handleAnnuler}
+        onValider={handleEnregistrer}
+      >
+        <ThemedView style={styles.field}>
           <ThemedText type="small" themeColor="textSecondary">
-            Absente ce mois
+            Nom
           </ThemedText>
-        ) : (
-          <ThemedText type="small" style={styles.tabularNums}>
-            {formatCentimesEnEuros(montant)}
+          <TextInput
+            value={libelle}
+            onChangeText={setLibelle}
+            accessibilityLabel={`Libellé de la ligne ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.libelle ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.libelle}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+
+        <ThemedView style={styles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Montant
           </ThemedText>
-        )}
-
-        <ActionsMenuButton
-          accessibilityLabel={`Actions pour la ligne ${libelleAccessible}`}
-          title={item.libelle}
-          // Alert.alert ne permet pas de désactiver une entrée individuellement
-          // (seulement d'ouvrir/fermer tout le menu) : on ne gate donc le menu
-          // que par `suppression`, comme sur les lignes niveau 2, plutôt que
-          // d'y ajouter `enregistrement` — sinon « Modifier » redevient
-          // injoignable pendant l'enregistrement de « Marquer absente », alors
-          // que ça a toujours été possible (seules « Marquer absente » et
-          // « Supprimer » étaient gérées par ces deux états avant l'introduction
-          // de ce menu unique, voir #26).
-          disabled={suppression}
-          actions={[
-            {
-              label: 'Modifier',
-              onPress: () => {
-                // Initialisé ici plutôt qu'au montage : `montant` provient
-                // d'une requête compte-wide (DepensesTab) qui peut ne pas
-                // avoir encore résolu quand cette ligne apparaît — on lit sa
-                // valeur la plus récente au moment où l'utilisateur ouvre
-                // effectivement l'édition.
-                setMontantSaisie(montant !== null ? centimesEnSaisie(montant) : '');
-                setEdition(true);
-              },
-            },
-            ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
-            { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
-          ]}
-        />
-      </ThemedView>
-
-      {erreur ? (
-        <ThemedText type="small" themeColor="danger">
-          {erreur}
-        </ThemedText>
-      ) : null}
-    </ThemedView>
+          <TextInput
+            value={montantSaisie}
+            onChangeText={setMontantSaisie}
+            placeholder="Ex. 1500"
+            placeholderTextColor={theme.textSecondary}
+            keyboardType="decimal-pad"
+            accessibilityLabel={`Montant de la ligne ${libelleAccessible}`}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+          />
+          {errors.montant ? (
+            <ThemedText type="small" themeColor="danger">
+              {errors.montant}
+            </ThemedText>
+          ) : null}
+        </ThemedView>
+      </AjoutPopup>
+    </>
   );
 }
 
@@ -1803,26 +1795,6 @@ const styles = StyleSheet.create({
   typesList: {
     gap: Spacing.two,
   },
-  typeRow: {
-    gap: Spacing.one,
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-  },
-  typeRowHeader: {
-    gap: Spacing.half,
-  },
-  typeRowInfo: {
-    gap: Spacing.half,
-  },
-  // Utilisé uniquement par LigneActionsEdition (2 boutons Annuler/Enregistrer,
-  // espacés). ActionsMenuButton porte son propre style d'alignement
-  // (actionsMenuButton) — ne pas réutiliser ce style-ci pour lui, voir le
-  // bug corrigé en review #26 (les deux partageaient ce style, l'un des deux
-  // en pâtissait à chaque changement de l'autre).
-  typeRowActions: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
   actionsMenuButton: {
     width: 44,
     height: 44,
@@ -1897,13 +1869,11 @@ const styles = StyleSheet.create({
   niveau3Libelle: {
     flex: 1,
   },
-  niveau3RowEdition: {
-    gap: Spacing.one,
-    borderRadius: Spacing.two,
-    padding: Spacing.two,
-  },
-  // Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant ») — ticket
-  // #41, voir docs/design/charte-graphique.md § Popups d'ajout.
+  // Popups d'ajout (niveau 2 « Nom », niveau 3 « Nom + Montant ») et popups
+  // « Modifier » (même composant AjoutPopup, ticket #41 — l'édition inline
+  // d'origine des lignes niveau 2/niveau 3 a été remplacée par ces popups
+  // pour rester homogène avec le style des popups d'ajout) — voir
+  // docs/design/charte-graphique.md § Popups d'ajout.
   popupOverlay: {
     flex: 1,
     alignItems: 'center',
