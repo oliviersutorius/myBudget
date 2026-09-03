@@ -1,6 +1,7 @@
-# Flow Maestro d'exemple — à adapter une fois le premier écran réel implémenté.
+# Smoke test : l'app démarre et affiche la page d'accueil (liste des
+# comptes, vide sur un émulateur fraîchement provisionné en CI).
 # Lancer avec: maestro test e2e/onboarding.yaml
 appId: com.mybudget.app
 ---
 - launchApp
-- assertVisible: 'myBudget'
+- assertVisible: 'Mes comptes'

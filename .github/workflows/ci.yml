@@ -59,12 +59,66 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      # Workflow managé (pas de dossier android/ versionné, voir .gitignore) :
+      # régénéré ici, jetable après le job. Le package `com.mybudget.app`
+      # (app.json) doit rester cohérent avec `appId` dans e2e/*.yaml.
+      - name: Générer le projet natif Android (expo prebuild)
+        run: npx expo prebuild --platform android --no-install
+      # Après le prebuild (pas avant) : la clé de cache est calculée à partir
+      # des fichiers gradle du projet natif, générés par ce step précédent —
+      # une clé calculée plus tôt (ex. via l'option cache: gradle de
+      # actions/setup-java) hasherait des fichiers encore inexistants.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle*') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+      # Release plutôt que debug : un APK debug RN/Expo n'embarque pas le
+      # bundle JS, il se connecte au serveur Metro — absent en CI, l'app
+      # resterait bloquée sans jamais afficher l'écran attendu (constaté en
+      # CI). `assembleRelease` embarque le bundle (APK autonome) et reste
+      # signé avec le keystore debug par défaut (voir signingConfig dans
+      # android/app/build.gradle généré) : pas de configuration de signature
+      # à ajouter pour ce test e2e.
+      - name: Construire l'APK release
+        run: cd android && ./gradlew assembleRelease --no-daemon --stacktrace
+      # `>> $GITHUB_PATH` plutôt qu'un `export PATH` dans le step suivant : le
+      # `script:` de reactivecircus/android-emulator-runner exécute chaque
+      # ligne dans un `sh -c` séparé, un `export` n'y survivrait pas d'une
+      # ligne à l'autre (constaté en CI — `maestro: not found`).
       - name: Installer Maestro
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
-      - name: Lancer les flows Maestro
         run: |
-          export PATH="$PATH:$HOME/.maestro/bin"
-          maestro test e2e/
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      # KVM (accélération matérielle) : requis par reactivecircus/android-emulator-runner
+      # pour démarrer l'émulateur en un temps raisonnable sur un runner ubuntu-latest —
+      # voir la doc de l'action.
+      - name: Activer KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Démarrer l'émulateur Android et lancer les flows Maestro
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            maestro test e2e/
 
 # Note : la Review N1 (/review) est déclenchée à la demande par le développeur,
 # pas automatiquement en CI (choix du projet — voir docs/AGENTS.md).

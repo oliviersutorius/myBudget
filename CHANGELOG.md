@@ -38,6 +38,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Formulaires de revenu et de type de dépense niveau 3 protégés contre les doubles soumissions (double-tap) et contre une mise à jour après fermeture prématurée du formulaire.
 - Total d'un type de dépense niveau 2 recalculé de façon cohérente avec le total niveau 1 (plus de divergence possible entre les deux).
 - Sur une ligne de type de dépense niveau 3, « Modifier » reste accessible pendant qu'un montant est en cours d'enregistrement ; « Marquer absente »/« Supprimer » ne peuvent plus se déclencher pendant qu'un enregistrement est déjà en cours sur la même ligne.
+- CI : le job Tests e2e (Maestro) démarre désormais un émulateur Android (build natif via `expo prebuild` + Gradle) avant d'exécuter les flows, au lieu d'échouer systématiquement faute de device connecté (#43).
 
 ### Changed
 
