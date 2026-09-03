@@ -69,6 +69,19 @@ jobs:
       # (app.json) doit rester cohérent avec `appId` dans e2e/*.yaml.
       - name: Générer le projet natif Android (expo prebuild)
         run: npx expo prebuild --platform android --no-install
+      # Après le prebuild (pas avant) : la clé de cache est calculée à partir
+      # des fichiers gradle du projet natif, générés par ce step précédent —
+      # une clé calculée plus tôt (ex. via l'option cache: gradle de
+      # actions/setup-java) hasherait des fichiers encore inexistants.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle*') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
       # Release plutôt que debug : un APK debug RN/Expo n'embarque pas le
       # bundle JS, il se connecte au serveur Metro — absent en CI, l'app
       # resterait bloquée sans jamais afficher l'écran attendu (constaté en
