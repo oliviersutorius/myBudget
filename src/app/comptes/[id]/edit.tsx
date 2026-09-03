@@ -1,10 +1,14 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ChevronIcon, KebabIcon, PlusIcon } from '@/components/icons';
+import {
+  ActionsMenuButton,
+  demanderConfirmationSuppression,
+} from '@/components/actions-menu-button';
+import { ChevronIcon, PlusIcon } from '@/components/icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Spacing } from '@/constants/theme';
@@ -440,75 +444,6 @@ function AjoutPopup({
         </Pressable>
       </Pressable>
     </Modal>
-  );
-}
-
-// Reste local à cet écran (non exporté) plutôt que déplacé dans
-// src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
-// par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
-// dans src/components/ ne le serait pas et exigerait ses propres tests. À
-// extraire quand un deuxième écran de liste en aura vraiment besoin (voir
-// docs/design/charte-graphique.md), pas avant.
-type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
-
-// Construit la liste de boutons d'un Alert.alert : « Annuler » toujours en
-// tête, puis les actions demandées. Partagé par demanderConfirmationSuppression
-// et ActionsMenuButton ci-dessous, qui sont chacun une variante (1 action
-// destructive fixe / N actions arbitraires) du même Alert.alert.
-function alertActions(actions: ActionMenuItem[]) {
-  return [
-    { text: 'Annuler', style: 'cancel' as const },
-    ...actions.map(({ label, onPress, destructive }) => ({
-      text: label,
-      style: destructive ? ('destructive' as const) : undefined,
-      onPress,
-    })),
-  ];
-}
-
-// Popup de confirmation partagée par les suppressions de cet écran (type de
-// dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
-// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
-function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
-  Alert.alert(
-    titre,
-    message,
-    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
-  );
-}
-
-// Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
-// pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
-// listes de l'onglet Dépenses par la charte graphique (ticket #26).
-function ActionsMenuButton({
-  accessibilityLabel,
-  title,
-  message,
-  disabled,
-  actions,
-}: {
-  accessibilityLabel: string;
-  title: string;
-  message?: string;
-  disabled?: boolean;
-  actions: ActionMenuItem[];
-}) {
-  const theme = useTheme();
-
-  const ouvrirActions = () => {
-    Alert.alert(title, message, alertActions(actions));
-  };
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      onPress={ouvrirActions}
-      style={styles.actionsMenuButton}
-    >
-      <KebabIcon color={theme.text} />
-    </Pressable>
   );
 }
 
@@ -1794,12 +1729,6 @@ const styles = StyleSheet.create({
   },
   typesList: {
     gap: Spacing.two,
-  },
-  actionsMenuButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   totalRow: {
     flexDirection: 'row',
