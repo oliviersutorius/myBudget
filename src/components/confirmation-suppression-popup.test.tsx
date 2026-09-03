@@ -5,12 +5,7 @@ import { useConfirmationSuppressionStore } from '@/store/use-confirmation-suppre
 
 describe('ConfirmationSuppressionPopup', () => {
   beforeEach(() => {
-    useConfirmationSuppressionStore.setState({
-      visible: false,
-      titre: '',
-      message: '',
-      onConfirmer: null,
-    });
+    useConfirmationSuppressionStore.setState({ titre: '', message: '', onConfirmer: null });
   });
 
   it('affiche le titre et le message de la demande en cours', () => {
@@ -37,7 +32,7 @@ describe('ConfirmationSuppressionPopup', () => {
     fireEvent.press(getByLabelText('Supprimer'));
 
     expect(onConfirmer).toHaveBeenCalledTimes(1);
-    expect(useConfirmationSuppressionStore.getState().visible).toBe(false);
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
   });
 
   it('« Annuler » referme la popup sans déclencher le callback', () => {
@@ -48,7 +43,7 @@ describe('ConfirmationSuppressionPopup', () => {
     fireEvent.press(getByLabelText('Annuler'));
 
     expect(onConfirmer).not.toHaveBeenCalled();
-    expect(useConfirmationSuppressionStore.getState().visible).toBe(false);
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
   });
 
   it('un tap sur le voile referme la popup sans déclencher le callback', () => {
@@ -59,7 +54,19 @@ describe('ConfirmationSuppressionPopup', () => {
     fireEvent.press(getByLabelText('Fermer la popup'));
 
     expect(onConfirmer).not.toHaveBeenCalled();
-    expect(useConfirmationSuppressionStore.getState().visible).toBe(false);
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
+  });
+
+  it('un double-tap sur « Supprimer » ne déclenche le callback qu’une seule fois', () => {
+    const onConfirmer = jest.fn();
+    useConfirmationSuppressionStore.getState().demander('Titre', 'Message', onConfirmer);
+
+    const { getByLabelText } = render(<ConfirmationSuppressionPopup />);
+    const boutonSupprimer = getByLabelText('Supprimer');
+    fireEvent.press(boutonSupprimer);
+    fireEvent.press(boutonSupprimer);
+
+    expect(onConfirmer).toHaveBeenCalledTimes(1);
   });
 
   it('un tap sur la carte ne referme pas la popup (absorbe le tap avant le voile)', () => {
@@ -68,6 +75,6 @@ describe('ConfirmationSuppressionPopup', () => {
     const { getByTestId } = render(<ConfirmationSuppressionPopup />);
     fireEvent.press(getByTestId('confirmation-suppression-popup-card'));
 
-    expect(useConfirmationSuppressionStore.getState().visible).toBe(true);
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).not.toBeNull();
   });
 });

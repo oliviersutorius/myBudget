@@ -2,17 +2,9 @@ import { Modal, Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Spacing } from '@/constants/theme';
+import { PopupOverlayColor, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useConfirmationSuppressionStore } from '@/store/use-confirmation-suppression-store';
-
-// Voile dérivé du token `text` (light) à 50% d'opacité, indépendant du thème
-// actif — même dérivation que `AjoutPopup` (comptes/[id]/edit.tsx, ticket
-// #41), copiée ici plutôt que partagée : `AjoutPopup` prend des champs de
-// formulaire en enfants (cas ajout/édition), cette popup n'affiche qu'un
-// titre et un message (cas confirmation) — les factoriser demanderait de
-// généraliser AjoutPopup pour un seul autre appelant, pas fait ici.
-const POPUP_OVERLAY_COLOR = `${Colors.light.text}80`;
 
 /**
  * Popup de confirmation avant une suppression, montée une fois à la racine
@@ -27,19 +19,18 @@ const POPUP_OVERLAY_COLOR = `${Colors.light.text}80`;
  */
 export function ConfirmationSuppressionPopup() {
   const theme = useTheme();
-  const { visible, titre, message, onConfirmer, fermer } = useConfirmationSuppressionStore();
-
-  const confirmer = () => {
-    fermer();
-    onConfirmer?.();
-  };
+  // `visible` dérivé de `onConfirmer` (pas de booléen séparé dans le store,
+  // voir son commentaire) : la popup est visible tant qu'un callback est en
+  // attente.
+  const { titre, message, onConfirmer, fermer, confirmer } = useConfirmationSuppressionStore();
+  const visible = onConfirmer !== null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={fermer}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Fermer la popup"
-        style={[styles.overlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        style={[styles.overlay, { backgroundColor: PopupOverlayColor }]}
         onPress={fermer}
       >
         {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand on

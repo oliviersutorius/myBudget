@@ -74,3 +74,11 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+// Voile plein écran des popups modales (`AjoutPopup` dans
+// comptes/[id]/edit.tsx, `ConfirmationSuppressionPopup`) : dérivé du token
+// `text` en light à 50% d'opacité, indépendant du thème actif — assombrit
+// aussi bien un fond clair qu'un fond sombre. Centralisé ici (plutôt que
+// redéfini dans chaque popup, voir review PR #48) pour qu'un futur ajustement
+// (opacité, contraste) ne se fasse qu'à un seul endroit.
+export const PopupOverlayColor = `${Colors.light.text}80`;

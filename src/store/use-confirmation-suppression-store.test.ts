@@ -2,16 +2,11 @@ import { useConfirmationSuppressionStore } from './use-confirmation-suppression-
 
 describe('useConfirmationSuppressionStore', () => {
   beforeEach(() => {
-    useConfirmationSuppressionStore.setState({
-      visible: false,
-      titre: '',
-      message: '',
-      onConfirmer: null,
-    });
+    useConfirmationSuppressionStore.setState({ titre: '', message: '', onConfirmer: null });
   });
 
-  it("n'est pas visible par défaut", () => {
-    expect(useConfirmationSuppressionStore.getState().visible).toBe(false);
+  it("n'a aucun callback en attente par défaut (popup fermée)", () => {
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
   });
 
   it('ouvre la popup avec le titre, le message et le callback fournis', () => {
@@ -20,20 +15,42 @@ describe('useConfirmationSuppressionStore', () => {
     useConfirmationSuppressionStore.getState().demander('Titre', 'Message', onConfirmer);
 
     const etat = useConfirmationSuppressionStore.getState();
-    expect(etat.visible).toBe(true);
     expect(etat.titre).toBe('Titre');
     expect(etat.message).toBe('Message');
     expect(etat.onConfirmer).toBe(onConfirmer);
   });
 
-  it('ferme la popup et oublie le callback en attente', () => {
-    useConfirmationSuppressionStore.getState().demander('Titre', 'Message', jest.fn());
+  it('fermer() oublie le callback en attente sans le déclencher', () => {
+    const onConfirmer = jest.fn();
+    useConfirmationSuppressionStore.getState().demander('Titre', 'Message', onConfirmer);
 
     useConfirmationSuppressionStore.getState().fermer();
 
-    const etat = useConfirmationSuppressionStore.getState();
-    expect(etat.visible).toBe(false);
-    expect(etat.onConfirmer).toBeNull();
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
+    expect(onConfirmer).not.toHaveBeenCalled();
+  });
+
+  it('confirmer() déclenche le callback en attente puis referme', () => {
+    const onConfirmer = jest.fn();
+    useConfirmationSuppressionStore.getState().demander('Titre', 'Message', onConfirmer);
+
+    useConfirmationSuppressionStore.getState().confirmer();
+
+    expect(onConfirmer).toHaveBeenCalledTimes(1);
+    expect(useConfirmationSuppressionStore.getState().onConfirmer).toBeNull();
+  });
+
+  it('confirmer() appelé deux fois ne déclenche le callback qu’une seule fois (double-tap)', () => {
+    // Le callback est capturé puis effacé en une seule mise à jour d'état
+    // (voir le commentaire de `confirmer` dans le store) : un second appel
+    // avant re-rendu du composant trouve `onConfirmer` déjà à `null`.
+    const onConfirmer = jest.fn();
+    useConfirmationSuppressionStore.getState().demander('Titre', 'Message', onConfirmer);
+
+    useConfirmationSuppressionStore.getState().confirmer();
+    useConfirmationSuppressionStore.getState().confirmer();
+
+    expect(onConfirmer).toHaveBeenCalledTimes(1);
   });
 
   it('une nouvelle demande remplace la précédente (jamais deux popups en attente)', () => {

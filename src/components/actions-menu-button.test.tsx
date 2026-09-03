@@ -29,12 +29,7 @@ describe('alertActions', () => {
 
 describe('demanderConfirmationSuppression', () => {
   beforeEach(() => {
-    useConfirmationSuppressionStore.setState({
-      visible: false,
-      titre: '',
-      message: '',
-      onConfirmer: null,
-    });
+    useConfirmationSuppressionStore.setState({ titre: '', message: '', onConfirmer: null });
   });
 
   it('ouvre useConfirmationSuppressionStore avec le titre, le message et le callback fournis', () => {
@@ -47,7 +42,6 @@ describe('demanderConfirmationSuppression', () => {
     demanderConfirmationSuppression('Titre', 'Message', onConfirmer);
 
     const etat = useConfirmationSuppressionStore.getState();
-    expect(etat.visible).toBe(true);
     expect(etat.titre).toBe('Titre');
     expect(etat.message).toBe('Message');
     expect(etat.onConfirmer).toBe(onConfirmer);

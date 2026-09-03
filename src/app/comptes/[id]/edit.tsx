@@ -11,7 +11,7 @@ import {
 import { ChevronIcon, PlusIcon } from '@/components/icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Spacing } from '@/constants/theme';
+import { PopupOverlayColor, Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
@@ -362,12 +362,6 @@ function Niveau1Selector({
   );
 }
 
-// Overlay des popups d'ajout (ticket #41) : dérivé du token `text` (light) à
-// 50% d'opacité plutôt qu'une couleur en dur — reste volontairement le même
-// quel que soit le thème actif (assombrit aussi bien un fond clair qu'un
-// fond sombre), voir docs/design/charte-graphique.md § Popups d'ajout.
-const POPUP_OVERLAY_COLOR = `${Colors.light.text}80`;
-
 // Popup d'ajout générique (ticket #41, maquette « A — Compact »), partagée
 // par l'ajout d'un type niveau 2 (Niveau1Pave, 1 champ) et d'une ligne
 // niveau 3 (Niveau2Ligne, 2 champs) : traitement neutre, cohérent avec le
@@ -402,7 +396,7 @@ function AjoutPopup({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Fermer la popup"
-        style={[styles.popupOverlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        style={[styles.popupOverlay, { backgroundColor: PopupOverlayColor }]}
         onPress={onFermer}
       >
         {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand on
