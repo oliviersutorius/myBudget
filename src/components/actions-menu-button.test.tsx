@@ -6,6 +6,7 @@ import {
   alertActions,
   demanderConfirmationSuppression,
 } from '@/components/actions-menu-button';
+import { useConfirmationSuppressionStore } from '@/store/use-confirmation-suppression-store';
 
 describe('alertActions', () => {
   it('place « Annuler » en tête, suivi des actions demandées', () => {
@@ -27,22 +28,29 @@ describe('alertActions', () => {
 });
 
 describe('demanderConfirmationSuppression', () => {
-  it('ouvre une confirmation Annuler/Supprimer et déclenche le callback au clic sur Supprimer', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  beforeEach(() => {
+    useConfirmationSuppressionStore.setState({
+      visible: false,
+      titre: '',
+      message: '',
+      onConfirmer: null,
+    });
+  });
+
+  it('ouvre useConfirmationSuppressionStore avec le titre, le message et le callback fournis', () => {
+    // Popup maison (ConfirmationSuppressionPopup) plutôt qu'un Alert.alert
+    // natif depuis le ticket #45 (voir le commentaire de la fonction) : ce
+    // test vérifie l'appel au store, le rendu de la popup elle-même étant
+    // couvert par confirmation-suppression-popup.test.tsx.
     const onConfirmer = jest.fn();
 
     demanderConfirmationSuppression('Titre', 'Message', onConfirmer);
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    const [titre, message, boutons] = alertSpy.mock.calls[0];
-    expect(titre).toBe('Titre');
-    expect(message).toBe('Message');
-    expect(boutons?.map((bouton) => bouton.text)).toEqual(['Annuler', 'Supprimer']);
-
-    boutons?.[1].onPress?.();
-    expect(onConfirmer).toHaveBeenCalledTimes(1);
-
-    alertSpy.mockRestore();
+    const etat = useConfirmationSuppressionStore.getState();
+    expect(etat.visible).toBe(true);
+    expect(etat.titre).toBe('Titre');
+    expect(etat.message).toBe('Message');
+    expect(etat.onConfirmer).toBe(onConfirmer);
   });
 });
 

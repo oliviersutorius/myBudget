@@ -25,7 +25,7 @@ Trois pistes de vert ont été comparées (une plus douce/désaturée « Sauge �
 **Sémantique des couleurs d'action** :
 
 - `primary` : action principale mise en avant (ex. lien "en savoir plus").
-- `danger` : uniquement pour signaler une erreur ou une action destructive (bouton "Supprimer" dans un menu, message d'erreur de formulaire). Les actions destructives elles-mêmes restent confirmées par une popup native (`Alert.alert`, style `destructive`) avant exécution — voir « Ton visuel général » ci-dessous.
+- `danger` : uniquement pour signaler une erreur ou une action destructive (bouton "Supprimer" dans un menu, message d'erreur de formulaire, libellé "Supprimer" de la popup de confirmation). Les actions destructives elles-mêmes restent confirmées par une popup dédiée avant exécution — voir « Popup de confirmation de suppression » et « Ton visuel général » ci-dessous.
 - Les actions neutres (Modifier, Annuler, navigation) utilisent `text`/`textSecondary`, pas `primary` — évite qu'une couleur d'accent soit diluée sur trop d'éléments à l'écran.
 
 ## Typographie
@@ -51,7 +51,7 @@ Ne pas introduire de taille de police en dur dans un écran (`fontSize` ad hoc) 
 
 Depuis le ticket #41 (refonte de l'onglet Dépenses, maquette « A — Compact »), les icônes d'action — chevron de repli/dépliage, « + » d'ajout, « ⋮ » de menu — sont rendues en **SVG traits** via `react-native-svg`, composants `ChevronIcon`/`PlusIcon`/`KebabIcon` de `src/components/icons.tsx` (couleur toujours passée en prop depuis un token `theme.xxx`, jamais en dur). Ce pattern remplace les caractères Unicode précédemment utilisés pour ces 3 usages précis (`▾`/`▸`, `⋮`) — rendu plus net et cohérent quel que soit le poids de police système, quel que soit l'écran (`ActionsMenuButton`, partagé par les onglets Dépenses et Revenus, en bénéficie aussi).
 
-- **Menu d'actions de ligne** : bouton « ⋮ » (`KebabIcon`), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée. Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 2 et niveau 3) par le ticket #26 via le composant partagé `ActionsMenuButton` (`src/app/comptes/[id]/edit.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne.
+- **Menu d'actions de ligne** : bouton « ⋮ » (`KebabIcon`), ouvrant un menu natif (`Alert.alert`) listant les actions disponibles (Modifier, Supprimer, actions spécifiques comme "Marquer absente") — la suppression déclenche toujours une seconde popup de confirmation dédiée (voir « Popup de confirmation de suppression » ci-dessous ; elle, contrairement à ce menu, n'est plus un `Alert.alert` natif depuis le ticket #45). Pattern établi sur l'onglet Revenus (ticket #12), généralisé à l'onglet Dépenses (types niveau 2 et niveau 3) par le ticket #26, puis à la liste des comptes par le ticket #16, via le composant partagé `ActionsMenuButton` (`src/components/actions-menu-button.tsx`). **Tout nouvel écran de liste avec actions par ligne doit réutiliser ce pattern**, pas des liens texte "Modifier"/"Supprimer" sous la ligne. Le menu lui-même reste natif pour l'instant — son harmonisation avec le design des popups reste ouverte (ticket #45).
 - **Chevrons de repli/dépliage** (pavé niveau 1, ligne niveau 2 de l'onglet Dépenses) : `ChevronIcon`, rotation SVG selon l'état ouvert/fermé.
 - **Chevrons de navigation** (`‹`/`›` pour changer de mois/année) : restent en caractères Unicode, taille `title`, non concernés par ce ticket — un seul usage, pas la peine d'en faire une icône SVG dédiée pour l'instant.
 - Zone tactile minimale `44×44` sur toute icône interactive (chevron de repli, `+`, `⋮`).
@@ -65,6 +65,14 @@ Introduit par le ticket #41 pour remplacer les formulaires d'ajout toujours visi
 - **Structure** : voile d'assombrissement plein écran (dérivé du token `text` à 50% d'opacité, indépendant du thème actif — assombrit aussi bien un fond clair qu'un fond sombre) qui ferme la popup au tap ; carte centrée (fond `background`, radius `Spacing.three`) portant un titre (`smallBold`), un sous-titre contextuel optionnel (`small`/`textSecondary`, ex. le pavé ou la ligne parente), les champs du formulaire (réutilisant `styles.field`/`styles.input` déjà existants), un message d'erreur éventuel, puis un pied Annuler/Ajouter aligné à droite.
 - **Usage actuel** : ajout d'un type de dépense niveau 2 (1 champ, Nom) depuis un pavé niveau 1 ; ajout d'une ligne niveau 3 (2 champs, Nom + Montant) depuis une ligne niveau 2.
 - Reste locale à `edit.tsx` (comme les autres composants propres à cet écran, voir le commentaire au-dessus de `ActionMenuItem`) : à extraire dans `src/components/` si un deuxième écran en a besoin.
+
+## Popup de confirmation de suppression
+
+Tranche, pour la popup de confirmation (pas pour le menu « ⋮ » lui-même), le point laissé ouvert par le ticket #45 : `demanderConfirmationSuppression` (`src/components/actions-menu-button.tsx`) ouvrait un `Alert.alert` natif — deux styles de popup se succédaient pour une même action (menu natif, puis confirmation native, puis potentiellement une popup maison type `AjoutPopup` pour l'édition). Remplacée par `ConfirmationSuppressionPopup` (`src/components/confirmation-suppression-popup.tsx`), montée une fois à la racine (`src/app/_layout.tsx`) et pilotée par `useConfirmationSuppressionStore` (état partagé entre écrans, même esprit que `useCompteActifStore`) plutôt que par un `useState` local à chaque écran appelant.
+
+- **Structure** : même voile + carte centrée que `AjoutPopup` (fond `background`, radius `Spacing.three`), mais sans champs de formulaire — titre (`smallBold`) et message (`small`/`textSecondary`) uniquement, puis un pied Annuler/Supprimer aligné à droite.
+- **Action destructive mise en évidence** : le libellé « Supprimer » est en `danger` (`type="link" themeColor="danger"`), pas dans un bouton plein — cohérent avec l'usage de `danger` réservé à la signalisation (voir « Sémantique des couleurs d'action » ci-dessus), pas introduit comme un nouveau style de bouton plein.
+- **Usage** : identique partout où `demanderConfirmationSuppression` est appelée (types de dépense niveau 2/niveau 3, revenu, compte) — un seul appel de fonction suffit, la popup elle-même n'a pas à être montée par l'écran appelant.
 
 ## Espacements
 
@@ -88,7 +96,7 @@ La maquette du ticket #41 (onglet Dépenses) donne des tailles de texte/graisses
 
 - Fonds neutres teintés sauge (jamais blanc/noir purs), un seul accent (`primary`) utilisé avec parcimonie — pas de dégradés, pas d'ombres portées marquées, pas d'illustrations.
 - Cards/lignes sur fond `backgroundElement`, jamais de bordure dessinée en plus (le contraste de fond suffit à délimiter).
-- Confirmations destructives systématiques via popup native (`Alert.alert`) plutôt que des UI de confirmation inline.
+- Confirmations destructives systématiques via popup dédiée (`ConfirmationSuppressionPopup`, voir ci-dessus) plutôt que des UI de confirmation inline.
 
 ## Hors scope de ce ticket
 

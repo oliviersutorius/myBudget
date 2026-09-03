@@ -2,6 +2,7 @@ import { Alert, Pressable, StyleSheet } from 'react-native';
 
 import { KebabIcon } from '@/components/icons';
 import { useTheme } from '@/hooks/use-theme';
+import { useConfirmationSuppressionStore } from '@/store/use-confirmation-suppression-store';
 
 // Extrait de `comptes/[id]/edit.tsx` (ticket #41) à l'occasion du ticket #16
 // (suppression d'un compte, page d'accueil) : la page d'accueil est le
@@ -32,17 +33,21 @@ export function alertActions(actions: ActionMenuItem[]) {
  * de dépense niveau 2, niveau 3, revenu, compte) : même forme Annuler/
  * Supprimer partout, déclenchée depuis l'entrée « Supprimer » d'un
  * `ActionsMenuButton`.
+ *
+ * Délègue à `useConfirmationSuppressionStore` plutôt que d'ouvrir un
+ * `Alert.alert` natif : la popup elle-même (`ConfirmationSuppressionPopup`,
+ * montée une fois à la racine dans `src/app/_layout.tsx`) est un composant
+ * maison cohérent avec le reste de la charte graphique (voile, carte,
+ * tokens Sauge) — tranche le point laissé ouvert par le ticket #45. Le menu
+ * d'actions natif ci-dessous (`ActionsMenuButton`) n'est pas concerné,
+ * portée distincte du même ticket.
  */
 export function demanderConfirmationSuppression(
   titre: string,
   message: string,
   onConfirmer: () => void,
 ) {
-  Alert.alert(
-    titre,
-    message,
-    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
-  );
+  useConfirmationSuppressionStore.getState().demander(titre, message, onConfirmer);
 }
 
 /**
