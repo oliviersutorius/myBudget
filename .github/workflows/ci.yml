@@ -71,8 +71,14 @@ jobs:
         run: npx expo prebuild --platform android --no-install
       - name: Construire l'APK debug
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+      # `>> $GITHUB_PATH` plutôt qu'un `export PATH` dans le step suivant : le
+      # `script:` de reactivecircus/android-emulator-runner exécute chaque
+      # ligne dans un `sh -c` séparé, un `export` n'y survivrait pas d'une
+      # ligne à l'autre (constaté en CI — `maestro: not found`).
       - name: Installer Maestro
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
       # KVM (accélération matérielle) : requis par reactivecircus/android-emulator-runner
       # pour démarrer l'émulateur en un temps raisonnable sur un runner ubuntu-latest —
       # voir la doc de l'action.
@@ -91,7 +97,6 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            export PATH="$PATH:$HOME/.maestro/bin"
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             maestro test e2e/
 
