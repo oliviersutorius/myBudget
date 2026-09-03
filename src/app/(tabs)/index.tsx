@@ -1,12 +1,21 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  ActionsMenuButton,
+  demanderConfirmationSuppression,
+} from '@/components/actions-menu-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { deleteCompte } from '@/db/queries/delete-compte';
 import { getComptesQuery } from '@/db/queries/get-comptes';
+import { estErreurContrainteForeignKey } from '@/utils/erreurs-sqlite';
+
+type Compte = Awaited<ReturnType<typeof getComptesQuery>>[number];
 
 export default function AccueilScreen() {
   const router = useRouter();
@@ -50,31 +59,98 @@ export default function AccueilScreen() {
             data={comptes}
             keyExtractor={(compte) => String(compte.id)}
             renderItem={({ item: compte }) => (
-              <ThemedView type="backgroundElement" style={styles.compteRow}>
-                <ThemedView style={styles.compteInfo}>
-                  <ThemedText type="smallBold">{compte.nom}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {compte.banque}
-                  </ThemedText>
-                </ThemedView>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Modifier le compte ${compte.nom}`}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/comptes/[id]/edit',
-                      params: { id: String(compte.id) },
-                    })
-                  }
-                >
-                  <ThemedText type="link">Modifier</ThemedText>
-                </Pressable>
-              </ThemedView>
+              <CompteRow
+                compte={compte}
+                onModifier={() =>
+                  router.push({
+                    pathname: '/comptes/[id]/edit',
+                    params: { id: String(compte.id) },
+                  })
+                }
+              />
             )}
           />
         )}
       </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+// Ligne de la liste des comptes : menu « ⋮ » Modifier/Supprimer (ticket
+// #16), même pattern que RevenuRow (ticket #12) — ActionsMenuButton a été
+// extrait dans src/components/ à cette occasion, la liste des comptes étant
+// le deuxième écran de liste à en avoir besoin (voir son commentaire
+// d'origine dans comptes/[id]/edit.tsx).
+function CompteRow({ compte, onModifier }: { compte: Compte; onModifier: () => void }) {
+  const [suppression, setSuppression] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  // Même garde-fou que RevenuRow : évite un setState après démontage si la
+  // ligne disparaît (suppression réussie) pendant que ce composant traite
+  // encore l'échec d'un appel concurrent.
+  const monte = useRef(true);
+  useEffect(
+    () => () => {
+      monte.current = false;
+    },
+    [],
+  );
+
+  const supprimer = async () => {
+    setErreur(null);
+    setSuppression(true);
+    try {
+      await deleteCompte(compte.id);
+    } catch (error) {
+      if (!monte.current) {
+        return;
+      }
+      // Contrainte de clé étrangère (PRAGMA foreign_keys = ON) : la
+      // suppression échoue tant que des types de dépense ou des revenus
+      // dépendent encore de ce compte (voir delete-compte.ts) — implémente
+      // la règle "suppression bloquée si historique existant"
+      // (docs/DOMAIN.md § invariants ; approximation "présence de lignes
+      // dépendantes" plutôt que "historique sur un mois passé" au sens
+      // strict, voir le commentaire de delete-compte.ts).
+      setErreur(
+        estErreurContrainteForeignKey(error)
+          ? 'Suppression impossible : des dépenses ou revenus sont encore rattachés à ce compte.'
+          : 'La suppression a échoué, réessayez.',
+      );
+      setSuppression(false);
+    }
+  };
+
+  const confirmerSuppression = () => {
+    demanderConfirmationSuppression(
+      'Supprimer ce compte ?',
+      `« ${compte.nom} » sera définitivement supprimé.`,
+      supprimer,
+    );
+  };
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.compteRow}>
+      <ThemedView style={styles.compteInfo}>
+        <ThemedText type="smallBold">{compte.nom}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {compte.banque}
+        </ThemedText>
+        {erreur ? (
+          <ThemedText type="small" themeColor="danger">
+            {erreur}
+          </ThemedText>
+        ) : null}
+      </ThemedView>
+
+      <ActionsMenuButton
+        accessibilityLabel={`Actions pour le compte ${compte.nom} (#${compte.id})`}
+        title={compte.nom}
+        disabled={suppression}
+        actions={[
+          { label: 'Modifier', onPress: onModifier },
+          { label: 'Supprimer', onPress: confirmerSuppression, destructive: true },
+        ]}
+      />
     </ThemedView>
   );
 }
@@ -132,7 +208,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     // La tab bar native (NativeTabs) survole le contenu au lieu de réserver
     // de la place dans le layout : sans cet inset, les dernières lignes
-    // (et leur bouton "Modifier") se retrouvent cachées dessous.
+    // (et leur bouton "⋮") se retrouvent cachées dessous.
     paddingBottom: BottomTabInset + Spacing.four,
   },
   compteRow: {

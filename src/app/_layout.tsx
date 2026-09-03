@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { ConfirmationSuppressionPopup } from '@/components/confirmation-suppression-popup';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { db } from '@/db/client';
@@ -47,6 +48,10 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
       </Stack>
+      {/* Montée une fois ici plutôt que par écran : pilotée par
+          useConfirmationSuppressionStore, déclenchée depuis n'importe quel
+          écran via demanderConfirmationSuppression (ticket #45). */}
+      <ConfirmationSuppressionPopup />
     </ThemeProvider>
   );
 }

@@ -4,6 +4,14 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)',
   ],
+  // `src/constants/theme.ts` importe `global.css` (boilerplate web de
+  // `create-expo-app`) : Jest ne sait pas parser du CSS, on le remplace par
+  // un module vide. Nécessaire dès qu'un test (premier cas : ticket #16,
+  // `actions-menu-button.test.tsx`) importe un composant qui dépend de
+  // `useTheme` -> `theme.ts`.
+  moduleNameMapper: {
+    '\\.css$': '<rootDir>/src/__mocks__/style-mock.js',
+  },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
@@ -15,6 +23,7 @@ module.exports = {
     '!src/db/queries/create-compte.ts', // idem : insertion mince, validation testée séparément (validate-compte-form.ts)
     '!src/db/queries/get-compte.ts', // idem : requête déclarative pure
     '!src/db/queries/update-compte.ts', // idem : mise à jour mince, validation testée séparément (validate-compte-form.ts)
+    '!src/db/queries/delete-compte.ts', // idem : suppression mince
     '!src/db/queries/get-types-depense-niveau2.ts', // idem : requête déclarative pure
     '!src/db/queries/create-type-depense-niveau2.ts', // idem : insertion mince, validation testée séparément (validate-type-depense-niveau2-form.ts)
     '!src/db/queries/update-type-depense-niveau2.ts', // idem : mise à jour mince, validation testée séparément (validate-type-depense-niveau2-form.ts)

@@ -1,13 +1,17 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ChevronIcon, KebabIcon, PlusIcon } from '@/components/icons';
+import {
+  ActionsMenuButton,
+  demanderConfirmationSuppression,
+} from '@/components/actions-menu-button';
+import { ChevronIcon, PlusIcon } from '@/components/icons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Spacing } from '@/constants/theme';
+import { PopupOverlayColor, Spacing } from '@/constants/theme';
 import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
@@ -36,6 +40,7 @@ import {
   type TypeDepenseNiveau3FormErrors,
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
+import { estErreurContrainteForeignKey } from '@/utils/erreurs-sqlite';
 import { decalerMois } from '@/utils/mois';
 import { centimesEnSaisie, formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
@@ -357,12 +362,6 @@ function Niveau1Selector({
   );
 }
 
-// Overlay des popups d'ajout (ticket #41) : dérivé du token `text` (light) à
-// 50% d'opacité plutôt qu'une couleur en dur — reste volontairement le même
-// quel que soit le thème actif (assombrit aussi bien un fond clair qu'un
-// fond sombre), voir docs/design/charte-graphique.md § Popups d'ajout.
-const POPUP_OVERLAY_COLOR = `${Colors.light.text}80`;
-
 // Popup d'ajout générique (ticket #41, maquette « A — Compact »), partagée
 // par l'ajout d'un type niveau 2 (Niveau1Pave, 1 champ) et d'une ligne
 // niveau 3 (Niveau2Ligne, 2 champs) : traitement neutre, cohérent avec le
@@ -397,7 +396,7 @@ function AjoutPopup({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Fermer la popup"
-        style={[styles.popupOverlay, { backgroundColor: POPUP_OVERLAY_COLOR }]}
+        style={[styles.popupOverlay, { backgroundColor: PopupOverlayColor }]}
         onPress={onFermer}
       >
         {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand on
@@ -440,75 +439,6 @@ function AjoutPopup({
         </Pressable>
       </Pressable>
     </Modal>
-  );
-}
-
-// Reste local à cet écran (non exporté) plutôt que déplacé dans
-// src/components/ : `src/app/**` est exclu de la couverture Jest (couvert
-// par l'e2e Maestro à la place, voir jest.config.js), un composant partagé
-// dans src/components/ ne le serait pas et exigerait ses propres tests. À
-// extraire quand un deuxième écran de liste en aura vraiment besoin (voir
-// docs/design/charte-graphique.md), pas avant.
-type ActionMenuItem = { label: string; onPress: () => void; destructive?: boolean };
-
-// Construit la liste de boutons d'un Alert.alert : « Annuler » toujours en
-// tête, puis les actions demandées. Partagé par demanderConfirmationSuppression
-// et ActionsMenuButton ci-dessous, qui sont chacun une variante (1 action
-// destructive fixe / N actions arbitraires) du même Alert.alert.
-function alertActions(actions: ActionMenuItem[]) {
-  return [
-    { text: 'Annuler', style: 'cancel' as const },
-    ...actions.map(({ label, onPress, destructive }) => ({
-      text: label,
-      style: destructive ? ('destructive' as const) : undefined,
-      onPress,
-    })),
-  ];
-}
-
-// Popup de confirmation partagée par les suppressions de cet écran (type de
-// dépense niveau 2, niveau 3, revenu) : même forme Annuler/Supprimer
-// partout, déclenchée depuis l'entrée « Supprimer » d'un ActionsMenuButton.
-function demanderConfirmationSuppression(titre: string, message: string, onConfirmer: () => void) {
-  Alert.alert(
-    titre,
-    message,
-    alertActions([{ label: 'Supprimer', onPress: onConfirmer, destructive: true }]),
-  );
-}
-
-// Bouton « ⋮ » ouvrant un menu natif d'actions (Modifier/Supprimer, etc.) —
-// pattern établi par RevenuRow (ticket #12) et généralisé à toutes les
-// listes de l'onglet Dépenses par la charte graphique (ticket #26).
-function ActionsMenuButton({
-  accessibilityLabel,
-  title,
-  message,
-  disabled,
-  actions,
-}: {
-  accessibilityLabel: string;
-  title: string;
-  message?: string;
-  disabled?: boolean;
-  actions: ActionMenuItem[];
-}) {
-  const theme = useTheme();
-
-  const ouvrirActions = () => {
-    Alert.alert(title, message, alertActions(actions));
-  };
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      onPress={ouvrirActions}
-      style={styles.actionsMenuButton}
-    >
-      <KebabIcon color={theme.text} />
-    </Pressable>
   );
 }
 
@@ -799,10 +729,8 @@ function Niveau2Ligne({
       // suppression échouera tant que des types niveau 3 dépendent encore
       // de celui-ci (voir delete-type-depense-niveau2.ts). Pas la peine de
       // laisser croire qu'un simple réessai suffira.
-      const bloqueParDesEnfants =
-        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
       setErreur(
-        bloqueParDesEnfants
+        estErreurContrainteForeignKey(error)
           ? 'Suppression impossible : des dépenses sont encore rattachées à ce type.'
           : 'La suppression a échoué, réessayez.',
       );
@@ -1168,10 +1096,8 @@ function TypeDepenseNiveau3Row({
       // suppression échoue tant que des montants historisés dépendent
       // encore de cette ligne (voir delete-type-depense-niveau3.ts). Pas la
       // peine de laisser croire qu'un simple réessai suffira.
-      const bloqueParDesEnfants =
-        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
       setErreur(
-        bloqueParDesEnfants
+        estErreurContrainteForeignKey(error)
           ? 'Suppression impossible : des montants sont encore rattachés à cette ligne.'
           : 'La suppression a échoué, réessayez.',
       );
@@ -1794,12 +1720,6 @@ const styles = StyleSheet.create({
   },
   typesList: {
     gap: Spacing.two,
-  },
-  actionsMenuButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   totalRow: {
     flexDirection: 'row',
