@@ -18,6 +18,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Page compte réorganisée en 4 onglets : Infos, Dépenses, Revenus, Budget (Revenus et Budget en coquilles fonctionnelles, en attendant les tickets #9/#12/#13).
 - Onglet Revenus : ajout d'un revenu sur un mois donné, navigation mois par mois, modification et suppression d'un revenu (#12).
 - Types de dépenses niveau 3 : saisie et historisation du montant par mois, avec action « Marquer absente » pour un mois sans dépense (#9).
+- Suppression d'un compte depuis la page d'accueil (menu « ⋮ » Modifier/Supprimer, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16).
 
 ### Fixed
 
@@ -43,3 +44,4 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Suppression du script `reset-project` hérité du scaffold `create-expo-app`, devenu un piège silencieux une fois le projet sorti du stade scaffold.
 - Charte graphique de myBudget formalisée : palette « Sauge » (light/dark), typographie, espacements — voir `docs/design/charte-graphique.md` (#26).
 - Actions « Modifier »/« Supprimer » des types de dépenses (niveaux 2 et 3) harmonisées sur le même menu « ⋮ » que l'onglet Revenus, à la place des liens texte précédents (#26).
+- Menu d'actions « ⋮ » extrait de la page compte vers un composant partagé (`src/components/actions-menu-button.tsx`), désormais réutilisé par la liste des comptes ; couvert par un test unitaire (#16).
