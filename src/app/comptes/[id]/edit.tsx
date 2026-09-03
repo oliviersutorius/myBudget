@@ -40,6 +40,7 @@ import {
   type TypeDepenseNiveau3FormErrors,
 } from '@/forms/validate-type-depense-niveau3-form';
 import { useTheme } from '@/hooks/use-theme';
+import { estErreurContrainteForeignKey } from '@/utils/erreurs-sqlite';
 import { decalerMois } from '@/utils/mois';
 import { centimesEnSaisie, formatCentimesEnEuros, parseMontantEnCentimes } from '@/utils/montant';
 
@@ -734,10 +735,8 @@ function Niveau2Ligne({
       // suppression échouera tant que des types niveau 3 dépendent encore
       // de celui-ci (voir delete-type-depense-niveau2.ts). Pas la peine de
       // laisser croire qu'un simple réessai suffira.
-      const bloqueParDesEnfants =
-        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
       setErreur(
-        bloqueParDesEnfants
+        estErreurContrainteForeignKey(error)
           ? 'Suppression impossible : des dépenses sont encore rattachées à ce type.'
           : 'La suppression a échoué, réessayez.',
       );
@@ -1103,10 +1102,8 @@ function TypeDepenseNiveau3Row({
       // suppression échoue tant que des montants historisés dépendent
       // encore de cette ligne (voir delete-type-depense-niveau3.ts). Pas la
       // peine de laisser croire qu'un simple réessai suffira.
-      const bloqueParDesEnfants =
-        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
       setErreur(
-        bloqueParDesEnfants
+        estErreurContrainteForeignKey(error)
           ? 'Suppression impossible : des montants sont encore rattachés à cette ligne.'
           : 'La suppression a échoué, réessayez.',
       );

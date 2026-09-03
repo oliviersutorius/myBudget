@@ -13,6 +13,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { deleteCompte } from '@/db/queries/delete-compte';
 import { getComptesQuery } from '@/db/queries/get-comptes';
+import { estErreurContrainteForeignKey } from '@/utils/erreurs-sqlite';
 
 type Compte = Awaited<ReturnType<typeof getComptesQuery>>[number];
 
@@ -107,11 +108,11 @@ function CompteRow({ compte, onModifier }: { compte: Compte; onModifier: () => v
       // suppression échoue tant que des types de dépense ou des revenus
       // dépendent encore de ce compte (voir delete-compte.ts) — implémente
       // la règle "suppression bloquée si historique existant"
-      // (docs/DOMAIN.md § invariants).
-      const bloqueParDesEnfants =
-        error instanceof Error && error.message.includes('FOREIGN KEY constraint failed');
+      // (docs/DOMAIN.md § invariants ; approximation "présence de lignes
+      // dépendantes" plutôt que "historique sur un mois passé" au sens
+      // strict, voir le commentaire de delete-compte.ts).
       setErreur(
-        bloqueParDesEnfants
+        estErreurContrainteForeignKey(error)
           ? 'Suppression impossible : des dépenses ou revenus sont encore rattachés à ce compte.'
           : 'La suppression a échoué, réessayez.',
       );
@@ -142,7 +143,7 @@ function CompteRow({ compte, onModifier }: { compte: Compte; onModifier: () => v
       </ThemedView>
 
       <ActionsMenuButton
-        accessibilityLabel={`Actions pour le compte ${compte.nom}`}
+        accessibilityLabel={`Actions pour le compte ${compte.nom} (#${compte.id})`}
         title={compte.nom}
         disabled={suppression}
         actions={[
