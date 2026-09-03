@@ -59,12 +59,41 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      # Workflow managé (pas de dossier android/ versionné, voir .gitignore) :
+      # régénéré ici, jetable après le job. Le package `com.mybudget.app`
+      # (app.json) doit rester cohérent avec `appId` dans e2e/*.yaml.
+      - name: Générer le projet natif Android (expo prebuild)
+        run: npx expo prebuild --platform android --no-install
+      - name: Construire l'APK debug
+        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
       - name: Installer Maestro
         run: curl -Ls "https://get.maestro.mobile.dev" | bash
-      - name: Lancer les flows Maestro
+      # KVM (accélération matérielle) : requis par reactivecircus/android-emulator-runner
+      # pour démarrer l'émulateur en un temps raisonnable sur un runner ubuntu-latest —
+      # voir la doc de l'action.
+      - name: Activer KVM
         run: |
-          export PATH="$PATH:$HOME/.maestro/bin"
-          maestro test e2e/
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Démarrer l'émulateur Android et lancer les flows Maestro
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            export PATH="$PATH:$HOME/.maestro/bin"
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            maestro test e2e/
 
 # Note : la Review N1 (/review) est déclenchée à la demande par le développeur,
 # pas automatiquement en CI (choix du projet — voir docs/AGENTS.md).
