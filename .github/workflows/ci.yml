@@ -69,8 +69,15 @@ jobs:
       # (app.json) doit rester cohérent avec `appId` dans e2e/*.yaml.
       - name: Générer le projet natif Android (expo prebuild)
         run: npx expo prebuild --platform android --no-install
-      - name: Construire l'APK debug
-        run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
+      # Release plutôt que debug : un APK debug RN/Expo n'embarque pas le
+      # bundle JS, il se connecte au serveur Metro — absent en CI, l'app
+      # resterait bloquée sans jamais afficher l'écran attendu (constaté en
+      # CI). `assembleRelease` embarque le bundle (APK autonome) et reste
+      # signé avec le keystore debug par défaut (voir signingConfig dans
+      # android/app/build.gradle généré) : pas de configuration de signature
+      # à ajouter pour ce test e2e.
+      - name: Construire l'APK release
+        run: cd android && ./gradlew assembleRelease --no-daemon --stacktrace
       # `>> $GITHUB_PATH` plutôt qu'un `export PATH` dans le step suivant : le
       # `script:` de reactivecircus/android-emulator-runner exécute chaque
       # ligne dans un `sh -c` séparé, un `export` n'y survivrait pas d'une
@@ -97,7 +104,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
             maestro test e2e/
 
 # Note : la Review N1 (/review) est déclenchée à la demande par le développeur,
