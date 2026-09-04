@@ -25,7 +25,7 @@ interface ConfirmationSuppressionState {
 // qu'un `useState` local par écran. Permet à `demanderConfirmationSuppression`
 // (src/components/actions-menu-button.tsx) de garder une API impérative
 // simple — un appel de fonction, sans que chaque écran appelant ait à gérer
-// sa propre popup — même esprit que `useCompteActifStore`.
+// sa propre popup.
 export const useConfirmationSuppressionStore = create<ConfirmationSuppressionState>((set, get) => ({
   titre: '',
   message: '',

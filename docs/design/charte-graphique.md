@@ -55,7 +55,7 @@ Depuis le ticket #41 (refonte de l'onglet Dépenses, maquette « A — Compact �
 - **Chevrons de repli/dépliage** (pavé niveau 1, ligne niveau 2 de l'onglet Dépenses) : `ChevronIcon`, rotation SVG selon l'état ouvert/fermé.
 - **Chevrons de navigation** (`‹`/`›` pour changer de mois/année) : restent en caractères Unicode, taille `title`, non concernés par ce ticket — un seul usage, pas la peine d'en faire une icône SVG dédiée pour l'instant.
 - Zone tactile minimale `44×44` sur toute icône interactive (chevron de repli, `+`, `⋮`).
-- `expo-symbols` (SF Symbols) est présent dans le code hérité du scaffold (`src/app/(tabs)/explore.tsx`, `src/components/ui/collapsible.tsx`) mais n'est pas le standard retenu pour les écrans myBudget — ces fichiers sont du boilerplate de démo à retirer au fil de l'eau (voir commentaire dans `jest.config.js`), pas un précédent à suivre.
+- `expo-symbols` (SF Symbols) est présent dans `src/components/ui/collapsible.tsx` (repli/dépliage niveau 2 de l'onglet Dépenses, `comptes/[id]/edit.tsx`) mais n'est pas le standard retenu pour les écrans myBudget — pas un précédent à suivre pour de nouvelles icônes (voir "Chevrons de repli/dépliage" ci-dessus, en SVG traits `icons.tsx`). `src/app/(tabs)/explore.tsx`, l'autre foyer historique d'`expo-symbols`, a été retiré lors de l'audit #47 (boilerplate de démo du scaffold, voir `docs/technique/audit-47.md`).
 
 ## Popups d'ajout
 
@@ -68,7 +68,7 @@ Introduit par le ticket #41 pour remplacer les formulaires d'ajout toujours visi
 
 ## Popup de confirmation de suppression
 
-Tranche, pour la popup de confirmation (pas pour le menu « ⋮ » lui-même), le point laissé ouvert par le ticket #45 : `demanderConfirmationSuppression` (`src/components/actions-menu-button.tsx`) ouvrait un `Alert.alert` natif — deux styles de popup se succédaient pour une même action (menu natif, puis confirmation native, puis potentiellement une popup maison type `AjoutPopup` pour l'édition). Remplacée par `ConfirmationSuppressionPopup` (`src/components/confirmation-suppression-popup.tsx`), montée une fois à la racine (`src/app/_layout.tsx`) et pilotée par `useConfirmationSuppressionStore` (état partagé entre écrans, même esprit que `useCompteActifStore`) plutôt que par un `useState` local à chaque écran appelant.
+Tranche, pour la popup de confirmation (pas pour le menu « ⋮ » lui-même), le point laissé ouvert par le ticket #45 : `demanderConfirmationSuppression` (`src/components/actions-menu-button.tsx`) ouvrait un `Alert.alert` natif — deux styles de popup se succédaient pour une même action (menu natif, puis confirmation native, puis potentiellement une popup maison type `AjoutPopup` pour l'édition). Remplacée par `ConfirmationSuppressionPopup` (`src/components/confirmation-suppression-popup.tsx`), montée une fois à la racine (`src/app/_layout.tsx`) et pilotée par `useConfirmationSuppressionStore` (état partagé entre écrans) plutôt que par un `useState` local à chaque écran appelant.
 
 - **Structure** : même voile + carte centrée que `AjoutPopup` (fond `background`, radius `Spacing.three`), mais sans champs de formulaire — titre (`smallBold`) et message (`small`/`textSecondary`) uniquement, puis un pied Annuler/Supprimer aligné à droite.
 - **Action destructive mise en évidence** : le libellé « Supprimer » est en `danger` (`type="link" themeColor="danger"`), pas dans un bouton plein — cohérent avec l'usage de `danger` réservé à la signalisation (voir « Sémantique des couleurs d'action » ci-dessus), pas introduit comme un nouveau style de bouton plein.
