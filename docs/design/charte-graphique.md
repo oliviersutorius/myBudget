@@ -55,7 +55,7 @@ Depuis le ticket #41 (refonte de l'onglet Dépenses, maquette « A — Compact �
 - **Chevrons de repli/dépliage** (pavé niveau 1, ligne niveau 2 de l'onglet Dépenses) : `ChevronIcon`, rotation SVG selon l'état ouvert/fermé.
 - **Chevrons de navigation** (`‹`/`›` pour changer de mois/année) : restent en caractères Unicode, taille `title`, non concernés par ce ticket — un seul usage, pas la peine d'en faire une icône SVG dédiée pour l'instant.
 - Zone tactile minimale `44×44` sur toute icône interactive (chevron de repli, `+`, `⋮`).
-- `expo-symbols` (SF Symbols) est présent dans `src/components/ui/collapsible.tsx` (repli/dépliage niveau 2 de l'onglet Dépenses, `comptes/[id]/edit.tsx`) mais n'est pas le standard retenu pour les écrans myBudget — pas un précédent à suivre pour de nouvelles icônes (voir "Chevrons de repli/dépliage" ci-dessus, en SVG traits `icons.tsx`). `src/app/(tabs)/explore.tsx`, l'autre foyer historique d'`expo-symbols`, a été retiré lors de l'audit #47 (boilerplate de démo du scaffold, voir `docs/technique/audit-47.md`).
+- `expo-symbols` (SF Symbols) n'est plus utilisé côté écrans myBudget — pas le standard retenu pour de nouvelles icônes (voir "Chevrons de repli/dépliage" ci-dessus, en SVG traits `icons.tsx`). Ses deux foyers historiques, `src/app/(tabs)/explore.tsx` et `src/components/ui/collapsible.tsx` (boilerplate de démo du scaffold, seul écran à les consommer), ont été retirés lors de l'audit #47 (`docs/technique/audit-47.md`). Reste un usage résiduel dans `src/components/app-tabs.web.tsx` (plateforme web, hors cible myBudget — voir `CLAUDE.md`).
 
 ## Popups d'ajout
 

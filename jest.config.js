@@ -49,7 +49,6 @@ module.exports = {
     '!src/components/external-link.tsx',
     '!src/components/themed-text.tsx',
     '!src/components/themed-view.tsx',
-    '!src/components/ui/collapsible.tsx',
     '!src/hooks/use-color-scheme.ts',
     '!src/hooks/use-color-scheme.web.ts',
     '!src/hooks/use-theme.ts',

@@ -102,5 +102,6 @@ Deux éléments ne sont pas du code mort au sens de "jamais atteint", mais posen
 
 ## Suivi
 
-- Ticket dédié ouvert pour le suivi des 4 vulnérabilités modérées transitives (§1.1).
-- Liste de code mort/dépendances ci-dessus soumise au développeur avant toute suppression (voir critères d'acceptance #47).
+- Ticket dédié ouvert pour le suivi des 4 vulnérabilités modérées transitives (§1.1) : #50.
+- Liste de code mort/dépendances ci-dessus soumise au développeur, qui a validé le retrait de l'export mort (§3.1), des 5 dépendances (§3.2), de l'écran "Explore" et de `use-settings-store.ts`/`use-compte-actif-store.ts` (§3.3).
+- **Correctif post-review N1** : la suppression de l'écran "Explore" a rendu orphelins `src/components/ui/collapsible.tsx` (seul consommateur restant, pas `comptes/[id]/edit.tsx` comme supposé à tort en cascade — cet écran a sa propre implémentation locale, `Niveau2RowCollapsible`, sans lien avec ce composant partagé) et les images `expo-badge.png`/`expo-badge-white.png` (utilisées uniquement par `web-badge.tsx`, déjà supprimé). Ces deux étaient sains au moment de l'audit initial (`ts-prune` ne les avait pas et ne pouvait pas les signaler, `explore.tsx` étant encore leur appelant) — devenus morts en conséquence directe de ce nettoyage même, repérés par la review N1 (`/review`) et retirés dans le même PR.
