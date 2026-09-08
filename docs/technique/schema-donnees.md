@@ -50,6 +50,12 @@ Pour tout un compte à un mois donné (pavé Variable de l'onglet Dépenses), `s
 
 Le mois affiché/saisi pour le variable se sélectionne indépendamment du fixe (toujours au mois courant) via un sélecteur de mois dédié (composant `MoisSelector`, extrait du sélecteur déjà utilisé par l'onglet Revenus) positionné entre les pavés Fixe et Variable de l'onglet Dépenses.
 
+## Montant disponible (ticket #13)
+
+`src/db/queries/calculer-montant-disponible.ts` (logique pure, testée unitairement) calcule le montant disponible d'un compte pour un mois donné : revenus du mois moins la somme des dépenses fixe et variable de ce même mois, déjà résolues/agrégées en amont (`sommeParNiveau2` de `resolveMontantsNiveau3Compte` pour le fixe, de `agregerMontantsNiveau3Compte` pour le variable) — aucune agrégation entre comptes.
+
+Pour le récapitulatif mensuel (onglet Budget, `BudgetTab`), le montant disponible est affiché pour les 12 mois d'une année à la fois (liste des mois) ainsi que pour le mois sélectionné (détail) : plutôt qu'une requête par mois affiché, `src/db/queries/get-montants-variable-compte-annee.ts` et `src/db/queries/get-revenus-annee.ts` chargent respectivement le variable et les revenus de l'année entière en une seule requête chacune (filtrées en SQL via `LIKE 'YYYY-%'` sur `mois`), regroupés côté client par mois ; le fixe réutilise `get-montants-historique-compte.ts` (déjà compte-wide, sans filtre de mois) résolu 12 fois en mémoire via `resolveMontantsNiveau3Compte`.
+
 ## Montants monétaires
 
 Stockés en `integer` (centimes), pour éviter les erreurs d'arrondi en virgule flottante. Les règles de validation à la saisie (signe, précision) restent à trancher dans le ticket #18.
