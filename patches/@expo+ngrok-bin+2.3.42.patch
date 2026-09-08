@@ -1,0 +1,75 @@
+diff --git a/node_modules/@expo/ngrok-bin/index.js b/node_modules/@expo/ngrok-bin/index.js
+index dacc831..5fe757c 100644
+--- a/node_modules/@expo/ngrok-bin/index.js
++++ b/node_modules/@expo/ngrok-bin/index.js
+@@ -1,11 +1,60 @@
+-try {
+-  module.exports = require.resolve(
+-    "@expo/ngrok-bin-" +
+-      process.platform +
+-      "-" +
+-      process.arch +
+-      (process.platform === "win32" ? "/ngrok.exe" : "/ngrok")
+-  );
+-} catch (e) {
+-  module.exports = null;
++// Patché (patch-package, voir patches/@expo+ngrok-bin+*.patch et
++// docs/technique/preview.md) : le binaire ngrok v2 embarqué par ce paquet
++// est rejeté par le service ngrok, qui exige désormais un agent v3.20.0+
++// (ERR_NGROK_121). On préfère donc un ngrok v3+ installé sur le PATH de la
++// machine (apt/brew/snap/téléchargement direct), avec repli sur le
++// comportement d'origine si aucun n'est trouvé (message d'erreur alors
++// inchangé, tel que documenté).
++const { execFileSync } = require("child_process");
++const fs = require("fs");
++const path = require("path");
++
++function resolveEmbeddedBinary() {
++  try {
++    return require.resolve(
++      "@expo/ngrok-bin-" +
++        process.platform +
++        "-" +
++        process.arch +
++        (process.platform === "win32" ? "/ngrok.exe" : "/ngrok")
++    );
++  } catch (e) {
++    return null;
++  }
+ }
++
++// Ne PAS utiliser `which`/`where` : npm/npx préfixe le PATH avec
++// `node_modules/.bin`, où vit le shim de CE paquet (bin/ngrok.js, qui
++// `require("../")` — donc nous-mêmes) → boucle de récursion infinie
++// (chaque appel se relance lui-même via le shim). On parcourt donc le PATH
++// manuellement en ignorant tout dossier sous node_modules.
++function findSystemNgrokV3() {
++  const executableName = process.platform === "win32" ? "ngrok.exe" : "ngrok";
++  const pathEntries = (process.env.PATH || "").split(path.delimiter);
++
++  for (const dir of pathEntries) {
++    if (!dir || dir.split(path.sep).includes("node_modules")) continue;
++
++    const candidate = path.join(dir, executableName);
++    try {
++      if (!fs.statSync(candidate).isFile()) continue;
++    } catch (e) {
++      continue;
++    }
++
++    try {
++      const versionOutput = execFileSync(candidate, ["version"], {
++        encoding: "utf8",
++      });
++      const match = versionOutput.match(/ngrok version (\d+)\./);
++      const majorVersion = match ? Number(match[1]) : undefined;
++      if (majorVersion && majorVersion >= 3) return candidate;
++    } catch (e) {
++      // Pas un binaire ngrok valide à cet emplacement, on continue.
++    }
++  }
++
++  return null;
++}
++
++module.exports = findSystemNgrokV3() || resolveEmbeddedBinary();

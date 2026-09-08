@@ -39,11 +39,28 @@ Sans impact sur la connexion Expo Go (bundle natif indépendant), mais bruyant e
 
 ## Réseau (WSL2)
 
-Par défaut, Metro sert l'app en mode LAN (`http://<ip-locale>:8081`). Si le téléphone n'arrive pas à joindre le serveur — cas fréquent en développant depuis **WSL2**, dont la carte réseau virtuelle est isolée de l'hôte physique — relancer en mode tunnel :
+Par défaut, Metro sert l'app en mode LAN (`http://<ip-locale>:8081`). Si le téléphone n'arrive pas à joindre le serveur — cas fréquent en développant depuis **WSL2**, dont la carte réseau virtuelle est isolée de l'hôte physique (pas de `.wslconfig` avec `networkingMode=mirrored` sur ce poste) — relancer en mode tunnel :
 
 ```bash
 npx expo start --tunnel
 ```
+
+### `--tunnel` : binaire ngrok v2 embarqué obsolète, patché — instabilité résiduelle connue
+
+`@expo/ngrok` (dernière version publiée : `4.1.3`) embarque via `@expo/ngrok-bin` un binaire **ngrok v2.3.41**. Le service ngrok exige désormais un agent **v3.20.0+** (`ERR_NGROK_121`), donc `--tunnel` échoue par défaut avec :
+
+```
+CommandError: TypeError: Cannot read properties of undefined (reading 'body')
+```
+
+**Prérequis** : ngrok v3+ installé sur le **PATH de la machine** (ex. `sudo apt install ngrok`, `brew install ngrok`, ou binaire depuis https://ngrok.com/download). Aucun téléchargement automatique n'est fait par le projet.
+
+**Correctifs appliqués** (via [`patch-package`](https://www.npmjs.com/package/patch-package), rejoués automatiquement à chaque `npm install`/`npm ci` via le script `postinstall`, voir `patches/`) :
+
+1. `patches/@expo+ngrok-bin+2.3.42.patch` — `@expo/ngrok-bin` résout désormais dynamiquement un ngrok v3+ trouvé sur le PATH système (en ignorant `node_modules/.bin`, pour éviter une récursion infinie sur son propre shim), avec repli sur le binaire v2 embarqué si aucun n'est trouvé.
+2. `patches/@expo+ngrok+4.1.3.patch` — le POST de création de tunnel (`api/tunnels`) est nettoyé des champs `authtoken`/`configPath`/`port` (acceptés silencieusement par l'API v2, rejetés en v3 comme hors schéma) ; une nouvelle définition de tunnel déjà existante (`... already exists`) est récupérée via l'API au lieu de faire échouer la connexion.
+
+**Limite connue, non résolue** : même patché, `--tunnel` reste **intermittent**. Root cause probable, non corrigée : Expo authentifie `--tunnel` avec un **jeton ngrok partagé, codé en dur dans `@expo/cli`, commun à tous les développeurs Expo** (`NGROK_CONFIG.authToken` dans `AsyncNgrok.js`, associé au domaine réservé `exp.direct`) — plausiblement saturé/rate-limité à l'échelle mondiale depuis la panne v2, ce qui produit des races à la création du tunnel (`already exists` / `tunnel not found` en alternance sur des tentatives successives). Un fix plus poussé existe (utiliser un jeton ngrok personnel à la place, déjà configuré sur cette machine dans `~/.config/ngrok/ngrok.yml`) mais nécessiterait de patcher un **second paquet interne d'Expo** (`@expo/cli`, imbriqué sous `expo/node_modules/`) et d'abandonner le domaine `exp.direct` — jugé disproportionné pour l'instant (fragilité accrue à chaque mise à jour d'`expo`). À réévaluer si `--tunnel` devient bloquant au quotidien.
 
 ## Limite de cet environnement (agents Claude Code)
 
