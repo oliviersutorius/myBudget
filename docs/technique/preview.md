@@ -39,11 +39,29 @@ Sans impact sur la connexion Expo Go (bundle natif indépendant), mais bruyant e
 
 ## Réseau (WSL2)
 
-Par défaut, Metro sert l'app en mode LAN (`http://<ip-locale>:8081`). Si le téléphone n'arrive pas à joindre le serveur — cas fréquent en développant depuis **WSL2**, dont la carte réseau virtuelle est isolée de l'hôte physique — relancer en mode tunnel :
+Par défaut, Metro sert l'app en mode LAN (`http://<ip-locale>:8081`). Si le téléphone n'arrive pas à joindre le serveur — cas fréquent en développant depuis **WSL2**, dont la carte réseau virtuelle est isolée de l'hôte physique (pas de `.wslconfig` avec `networkingMode=mirrored` sur ce poste) — relancer en mode tunnel :
 
 ```bash
 npx expo start --tunnel
 ```
+
+### Limite connue (non résolue) — `--tunnel` cassé par obsolescence de `@expo/ngrok`
+
+`npx expo start --tunnel` échoue systématiquement avec :
+
+```
+CommandError: TypeError: Cannot read properties of undefined (reading 'body')
+```
+
+**Root cause confirmée** : `@expo/ngrok` (dernière version publiée : `4.1.3`, installée dans ce projet) embarque via `@expo/ngrok-bin` un binaire **ngrok v2.3.41**. Ngrok a relevé la version minimale d'agent acceptée par son service à **v3.20.0** — le binaire v2 embarqué se voit donc systématiquement refuser la connexion (`ERR_NGROK_121 : "Your ngrok-agent version ... is too old"`), et `@expo/ngrok` ne gère pas cette réponse d'erreur (d'où le crash `undefined.body`). `@expo/ngrok` n'a jamais été mis à jour pour embarquer un binaire v3 — c'est un problème upstream, non corrigeable dans ce projet.
+
+**Statut** : accepté comme limite connue de l'environnement de dev, sans solution appliquée à ce jour. Le mode LAN (`npm run start` sans `--tunnel`) ne fonctionne pas non plus tel quel sur ce poste WSL2 (réseau NAT isolé du LAN physique). Pistes de contournement identifiées mais non mises en œuvre :
+
+- Activer le mode réseau **mirrored** de WSL2 (`%UserProfile%\.wslconfig` → `networkingMode=mirrored`, puis `wsl --shutdown` côté Windows) : rendrait `--lan` utilisable nativement. Nécessite Windows 11 22H2+.
+- Forwarding manuel du port 8081 host↔WSL2 (`netsh interface portproxy`) : fonctionne sans changer le mode réseau, mais à refaire à chaque redémarrage (l'IP WSL2 change).
+- Remplacer manuellement le binaire ngrok embarqué par un binaire v3 réel : fragile, écrasé à chaque `npm install`.
+
+À réévaluer si le besoin de prévisualisation via `--tunnel`/`--lan` depuis ce poste WSL2 devient bloquant.
 
 ## Limite de cet environnement (agents Claude Code)
 
