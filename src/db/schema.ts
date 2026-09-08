@@ -84,6 +84,38 @@ export const montantsDepenseHistorique = sqliteTable(
   ],
 );
 
+// Montant d'un type de dépense niveau 3 **variable**, saisi indépendamment
+// pour chaque mois calendaire — jamais reconduit d'un mois à l'autre
+// (contrairement au fixe, voir `montantsDepenseHistorique` ci-dessus). Une
+// ligne n'existe que si l'utilisateur a effectivement saisi un montant pour
+// ce mois : `montant` est donc `not null`, et l'absence de ligne pour un
+// (type, mois) donné signifie « non saisi ce mois-là » — pas de valeur
+// `null` à sauvegarder pour marquer une absence, à la différence du fixe.
+// Voir docs/DOMAIN.md §3.3 et ticket #52.
+export const montantsDepenseVariable = sqliteTable(
+  'montants_depense_variable',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    typeDepenseNiveau3Id: integer('type_depense_niveau3_id')
+      .notNull()
+      .references(() => typesDepenseNiveau3.id),
+    // Mois de la saisie, format 'YYYY-MM'.
+    mois: text('mois').notNull(),
+    // Montant en centimes.
+    montant: integer('montant').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [
+    index('montants_depense_variable_type_id_idx').on(table.typeDepenseNiveau3Id),
+    uniqueIndex('montants_depense_variable_type_mois_idx').on(
+      table.typeDepenseNiveau3Id,
+      table.mois,
+    ),
+  ],
+);
+
 export const revenus = sqliteTable(
   'revenus',
   {
