@@ -1,0 +1,39 @@
+diff --git a/node_modules/@expo/ngrok/index.js b/node_modules/@expo/ngrok/index.js
+index c9e5f8d..bd7eb2e 100644
+--- a/node_modules/@expo/ngrok/index.js
++++ b/node_modules/@expo/ngrok/index.js
+@@ -27,9 +27,33 @@ async function connect(opts) {
+ async function connectRetry(opts, retryCount = 0) {
+   opts.name = String(opts.name || uuid.v4());
+   try {
+-    const response = await ngrokClient.startTunnel(opts);
++    // Patché (patch-package) : ngrok v3 rejette la création de tunnel si le
++    // JSON posté contient des champs hors du schéma HTTPv2Tunnel (authtoken,
++    // configPath, port sont consommés plus haut, avant cet appel, et n'ont
++    // rien à faire dans la définition du tunnel elle-même). Voir
++    // docs/technique/preview.md.
++    const { authtoken, configPath, port, onStatusChange, onLogEvent, ...tunnelOpts } = opts;
++    const response = await ngrokClient.startTunnel(tunnelOpts);
+     return response.public_url;
+   } catch (err) {
++    // Patché (patch-package) : sous ngrok v3, la création du tunnel réussit
++    // parfois côté serveur alors que le client considère la requête en échec
++    // (réponse lente/perdue) — le retry suivant, avec le même nom (opts.name,
++    // stable sur tous les essais), se fait alors rejeter avec "already
++    // exists" au lieu d'un vrai code d'erreur retriable. Dans ce cas précis,
++    // le tunnel existe déjà : on récupère son URL plutôt que d'échouer. Voir
++    // docs/technique/preview.md.
++    if (err.body && err.body.details && /already exists/.test(err.body.details.err || "")) {
++      for (let i = 0; i < 10; i++) {
++        try {
++          const existing = await ngrokClient.tunnelDetail(opts.name);
++          return existing.public_url;
++        } catch (lookupErr) {
++          await new Promise((resolve) => setTimeout(resolve, 300));
++        }
++      }
++      throw err;
++    }
+     if (!isRetriable(err) || retryCount >= 100) {
+       throw err;
+     }
