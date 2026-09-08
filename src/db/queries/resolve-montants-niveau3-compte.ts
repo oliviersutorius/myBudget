@@ -94,3 +94,12 @@ export function resolveMontantsNiveau3Compte(
 
   return agregerMontantsNiveau3Compte(lignesResolues);
 }
+
+/**
+ * Somme toutes les valeurs d'une `sommeParNiveau2` (fixe ou variable) en un
+ * seul total — la répartition par type niveau 2 n'est plus pertinente
+ * au-delà de ce point (ex. montant disponible, ticket #13).
+ */
+export function sommeTotale(sommeParNiveau2: Map<number, number>): number {
+  return [...sommeParNiveau2.values()].reduce((total, valeur) => total + valeur, 0);
+}

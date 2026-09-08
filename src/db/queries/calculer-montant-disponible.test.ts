@@ -1,15 +1,16 @@
-import { calculerMontantDisponible } from './calculer-montant-disponible';
+import { calculerMontantDisponible, sommerMontants } from './calculer-montant-disponible';
 import {
-  resolveMontantsNiveau3Compte,
   agregerMontantsNiveau3Compte,
+  resolveMontantsNiveau3Compte,
+  sommeTotale,
 } from './resolve-montants-niveau3-compte';
 
 describe('calculerMontantDisponible', () => {
   it('égale les revenus quand il n’y a aucune dépense', () => {
     const resultat = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: new Map(),
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: 0,
+      sommeDepensesVariable: 0,
     });
 
     expect(resultat).toBe(200000);
@@ -18,21 +19,18 @@ describe('calculerMontantDisponible', () => {
   it('soustrait les dépenses fixe et variable aux revenus', () => {
     const resultat = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: new Map([
-        [10, 80000],
-        [20, 30000],
-      ]),
-      sommeParNiveau2Variable: new Map([[30, 15000]]),
+      sommeDepensesFixe: 110000,
+      sommeDepensesVariable: 15000,
     });
 
-    expect(resultat).toBe(200000 - 80000 - 30000 - 15000);
+    expect(resultat).toBe(200000 - 110000 - 15000);
   });
 
   it('peut être négatif quand les dépenses dépassent les revenus', () => {
     const resultat = calculerMontantDisponible({
       sommeRevenus: 50000,
-      sommeParNiveau2Fixe: new Map([[10, 80000]]),
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: 80000,
+      sommeDepensesVariable: 0,
     });
 
     expect(resultat).toBe(-30000);
@@ -41,19 +39,31 @@ describe('calculerMontantDisponible', () => {
   it('vaut 0 sans revenu ni dépense', () => {
     const resultat = calculerMontantDisponible({
       sommeRevenus: 0,
-      sommeParNiveau2Fixe: new Map(),
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: 0,
+      sommeDepensesVariable: 0,
     });
 
     expect(resultat).toBe(0);
   });
 });
 
+describe('sommerMontants', () => {
+  it('vaut 0 pour une liste vide', () => {
+    expect(sommerMontants([])).toBe(0);
+  });
+
+  it('somme le montant de chaque ligne', () => {
+    const resultat = sommerMontants([{ montant: 1000 }, { montant: 2500 }, { montant: 300 }]);
+
+    expect(resultat).toBe(3800);
+  });
+});
+
 // Scénarios explicitement demandés par les critères d'acceptance du ticket
 // #13 : montants historisés (fixe) combinés au calcul du montant
 // disponible — enchaîne resolveMontantsNiveau3Compte (résolution de
-// l'historique, #9/#17) et calculerMontantDisponible plutôt que de
-// dupliquer des Map déjà résolues à la main.
+// l'historique, #9/#17), sommeTotale et calculerMontantDisponible plutôt
+// que de dupliquer des totaux déjà calculés à la main.
 describe('calculerMontantDisponible — avec montants historisés (#13)', () => {
   it('dépense fixe inchangée depuis plusieurs mois : même montant disponible chaque mois', () => {
     const historique = [
@@ -62,13 +72,17 @@ describe('calculerMontantDisponible — avec montants historisés (#13)', () => 
 
     const disponibleJanvier = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-01').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-01').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
     const disponibleJuin = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-06').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-06').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
 
     expect(disponibleJanvier).toBe(120000);
@@ -85,13 +99,17 @@ describe('calculerMontantDisponible — avec montants historisés (#13)', () => 
 
     const disponibleAvantChangement = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-02').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-02').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
     const disponibleMoisDuChangement = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-03').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-03').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
 
     expect(disponibleAvantChangement).toBe(120000);
@@ -106,13 +124,17 @@ describe('calculerMontantDisponible — avec montants historisés (#13)', () => 
 
     const disponibleAvantDisparition = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-03').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-03').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
     const disponibleApresDisparition = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historique, '2026-04').sommeParNiveau2,
-      sommeParNiveau2Variable: new Map(),
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historique, '2026-04').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: 0,
     });
 
     expect(disponibleAvantDisparition).toBe(120000);
@@ -127,8 +149,12 @@ describe('calculerMontantDisponible — avec montants historisés (#13)', () => 
 
     const resultat = calculerMontantDisponible({
       sommeRevenus: 200000,
-      sommeParNiveau2Fixe: resolveMontantsNiveau3Compte(historiqueFixe, '2026-03').sommeParNiveau2,
-      sommeParNiveau2Variable: agregerMontantsNiveau3Compte(variableDuMois).sommeParNiveau2,
+      sommeDepensesFixe: sommeTotale(
+        resolveMontantsNiveau3Compte(historiqueFixe, '2026-03').sommeParNiveau2,
+      ),
+      sommeDepensesVariable: sommeTotale(
+        agregerMontantsNiveau3Compte(variableDuMois).sommeParNiveau2,
+      ),
     });
 
     expect(resultat).toBe(200000 - 80000 - 4500);
