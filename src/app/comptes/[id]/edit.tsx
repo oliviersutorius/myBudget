@@ -20,9 +20,12 @@ import { deleteMontantDepenseVariable } from '@/db/queries/delete-montant-depens
 import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
+import { calculerMontantDisponible } from '@/db/queries/calculer-montant-disponible';
 import { getMontantsHistoriqueCompteQuery } from '@/db/queries/get-montants-historique-compte';
 import { getMontantsVariableCompteQuery } from '@/db/queries/get-montants-variable-compte';
+import { getMontantsVariableCompteAnneeQuery } from '@/db/queries/get-montants-variable-compte-annee';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
+import { getRevenusAnneeQuery } from '@/db/queries/get-revenus-annee';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import {
@@ -356,7 +359,7 @@ export default function EditionCompteScreen() {
           ) : null}
           {ongletsVisites.has('budget') ? (
             <ThemedView style={onglet === 'budget' ? undefined : styles.masqueDisplayNone}>
-              <BudgetTab />
+              <BudgetTab compteId={compteId} />
             </ThemedView>
           ) : null}
         </ScrollView>
@@ -1642,15 +1645,64 @@ function RevenuForm({
   );
 }
 
-// Onglet placeholder pour la structure de navigation (sélecteur d'année,
-// liste des mois, détail d'un mois avec retour). Le contenu réel du détail
-// (répartition des dépenses, revenus, montant disponible) dépend des
-// tickets #9, #12 et #13 — voir ticket #34.
-function BudgetTab() {
+// Sélecteur d'année, liste des mois (montant disponible en ligne récap) et
+// détail d'un mois avec retour (ticket #13, sur la structure de navigation
+// posée par #34). Le fixe se résout à partir de l'historique compte-wide
+// (une seule requête, comme DepensesTab) ; le variable et les revenus se
+// chargent sur l'année affichée (une requête chacun) plutôt qu'un aller-
+// retour par mois affiché — voir get-montants-variable-compte-annee.ts et
+// get-revenus-annee.ts.
+function BudgetTab({ compteId }: { compteId: number }) {
   const [annee, setAnnee] = useState(() => new Date().getFullYear());
   const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
 
+  const { data: historiqueCompte } = useLiveQuery(getMontantsHistoriqueCompteQuery(compteId), [
+    compteId,
+  ]);
+  const { data: variableAnnee } = useLiveQuery(
+    getMontantsVariableCompteAnneeQuery(compteId, annee),
+    [compteId, annee],
+  );
+  const { data: revenusAnnee } = useLiveQuery(getRevenusAnneeQuery(compteId, annee), [
+    compteId,
+    annee,
+  ]);
+
+  // Montant disponible par mois (1-12) de l'année affichée — ni agrégé ni
+  // comparé entre comptes (règle métier #13), calculé uniquement à partir
+  // des données de `compteId`.
+  const disponiblesParMois = useMemo(() => {
+    const resultat = new Map<number, number>();
+
+    for (let mois = 1; mois <= 12; mois++) {
+      const moisCle = `${annee}-${String(mois).padStart(2, '0')}`;
+      const { sommeParNiveau2: sommeFixe } = resolveMontantsNiveau3Compte(
+        historiqueCompte,
+        moisCle,
+      );
+      const { sommeParNiveau2: sommeVariable } = agregerMontantsNiveau3Compte(
+        variableAnnee.filter((ligne) => ligne.mois === moisCle),
+      );
+      const sommeRevenus = revenusAnnee
+        .filter((revenu) => revenu.mois === moisCle)
+        .reduce((total, revenu) => total + revenu.montant, 0);
+
+      resultat.set(
+        mois,
+        calculerMontantDisponible({
+          sommeRevenus,
+          sommeParNiveau2Fixe: sommeFixe,
+          sommeParNiveau2Variable: sommeVariable,
+        }),
+      );
+    }
+
+    return resultat;
+  }, [historiqueCompte, variableAnnee, revenusAnnee, annee]);
+
   if (moisSelectionne !== null) {
+    const disponible = disponiblesParMois.get(moisSelectionne) ?? 0;
+
     return (
       <ThemedView style={styles.section}>
         <Pressable
@@ -1664,8 +1716,22 @@ function BudgetTab() {
         <ThemedText type="smallBold">
           {MOIS_LIBELLES[moisSelectionne - 1]} {annee}
         </ThemedText>
+
+        <ThemedView style={styles.totalRow}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Montant disponible
+          </ThemedText>
+          <ThemedText
+            type="smallBold"
+            themeColor={disponible < 0 ? 'danger' : undefined}
+            style={styles.tabularNums}
+          >
+            {formatCentimesEnEuros(disponible)}
+          </ThemedText>
+        </ThemedView>
+
         <ThemedText type="small" themeColor="textSecondary">
-          Détail du mois à venir (dépend des tickets #9, #12, #13).
+          Détail des dépenses et revenus du mois : voir les onglets Dépenses et Revenus.
         </ThemedText>
       </ThemedView>
     );
@@ -1698,6 +1764,7 @@ function BudgetTab() {
       <ThemedView style={styles.typesList}>
         {MOIS_LIBELLES.map((libelleMois, index) => {
           const mois = 12 - index;
+          const disponible = disponiblesParMois.get(mois) ?? 0;
           return (
             <Pressable
               key={mois}
@@ -1707,8 +1774,12 @@ function BudgetTab() {
             >
               <ThemedView type="backgroundElement" style={styles.moisRow}>
                 <ThemedText type="small">{MOIS_LIBELLES[mois - 1]}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  — (à venir)
+                <ThemedText
+                  type="small"
+                  themeColor={disponible < 0 ? 'danger' : 'textSecondary'}
+                  style={styles.tabularNums}
+                >
+                  {formatCentimesEnEuros(disponible)}
                 </ThemedText>
               </ThemedView>
             </Pressable>
