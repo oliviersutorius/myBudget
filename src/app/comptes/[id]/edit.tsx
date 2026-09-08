@@ -132,6 +132,34 @@ function MoisSelector({ mois, onChanger }: { mois: string; onChanger: (mois: str
   );
 }
 
+// Persiste le montant d'un type niveau 3 en respectant la sémantique de son
+// niveau 1 (ticket #52, voir DOMAIN.md §3.3) : le fixe est toujours
+// reconduit **à partir de maintenant**, donc écrit sur `moisCourant()` lu au
+// moment de l'appel (jamais `mois`, qui peut être une valeur de rendu
+// obsolète si l'écran est resté ouvert sans se re-render à cheval sur un
+// changement de mois — review N1 de #52) ; le variable est écrit sur le
+// mois explicitement affiché/sélectionné (`mois`), qui n'a pas de raison
+// d'être le mois courant (navigation indépendante, voir MoisSelector).
+// Centralise aussi le if/else fixe-vs-variable, dupliqué sinon à chaque
+// point d'appel (ajout, modification, effacement — review N1 de #52).
+function enregistrerMontantNiveau3(
+  niveau1: Niveau1,
+  typeDepenseNiveau3Id: number,
+  mois: string,
+  montant: number,
+) {
+  return niveau1 === 'fixe'
+    ? setMontantDepenseNiveau3(typeDepenseNiveau3Id, moisCourant(), montant)
+    : setMontantDepenseVariable(typeDepenseNiveau3Id, mois, montant);
+}
+
+/** Symétrique de `enregistrerMontantNiveau3` pour « Marquer absente » (fixe) / « Effacer la saisie de ce mois » (variable). */
+function effacerMontantNiveau3(niveau1: Niveau1, typeDepenseNiveau3Id: number, mois: string) {
+  return niveau1 === 'fixe'
+    ? setMontantDepenseNiveau3(typeDepenseNiveau3Id, moisCourant(), null)
+    : deleteMontantDepenseVariable(typeDepenseNiveau3Id, mois);
+}
+
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const compteId = Number(id);
@@ -364,37 +392,6 @@ function BarreOnglets({
             <ThemedText type={actif === item.cle ? 'smallBold' : 'small'}>
               {item.libelle}
             </ThemedText>
-          </ThemedView>
-        </Pressable>
-      ))}
-    </ThemedView>
-  );
-}
-
-function Niveau1Selector({
-  valeur,
-  onChanger,
-  accessibilityLabelPrefix,
-}: {
-  valeur: Niveau1 | null;
-  onChanger: (niveau1: Niveau1) => void;
-  accessibilityLabelPrefix: string;
-}) {
-  return (
-    <ThemedView style={styles.niveau1Row}>
-      {(['fixe', 'variable'] as const).map((option) => (
-        <Pressable
-          key={option}
-          accessibilityRole="button"
-          accessibilityLabel={`${accessibilityLabelPrefix} — ${LIBELLE_NIVEAU1[option]}`}
-          onPress={() => onChanger(option)}
-          style={styles.niveau1ChipWrapper}
-        >
-          <ThemedView
-            type={valeur === option ? 'backgroundSelected' : 'backgroundElement'}
-            style={styles.niveau1Chip}
-          >
-            <ThemedText type="small">{LIBELLE_NIVEAU1[option]}</ThemedText>
           </ThemedView>
         </Pressable>
       ))}
@@ -734,6 +731,16 @@ function Niveau1Pave({
 // qu'une édition inline dans la ligne : homogénéité demandée après coup par
 // le développeur (édition inline d'origine jugée non cohérente avec le
 // style des popups d'ajout du ticket #41).
+//
+// Le niveau 1 (fixe/variable) n'est plus modifiable depuis cette popup
+// (retiré au ticket #52, review N1) : les montants fixe et variable vivent
+// désormais dans deux tables distinctes (`montants_depense_historique` vs
+// `montants_depense_variable`, voir schema.ts), interrogées indépendamment
+// par pavé. Permettre de basculer un type d'un niveau 1 à l'autre après
+// création rendrait ses montants déjà saisis invisibles côté UI (toujours
+// en base, mais sous le mauvais pavé) sans mécanisme de migration entre les
+// deux tables — cohérent avec DOMAIN.md §3.2 : « le niveau 1 est fixé à la
+// création d'un type niveau 2, jamais saisi indépendamment ».
 function Niveau2Ligne({
   item,
   montantsParType3,
@@ -754,7 +761,6 @@ function Niveau2Ligne({
   const [aEteOuvert, setAEteOuvert] = useState(false);
   const [edition, setEdition] = useState(false);
   const [libelle, setLibelle] = useState(item.libelle);
-  const [niveau1, setNiveau1] = useState<Niveau1 | null>(item.niveau1);
   const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [suppression, setSuppression] = useState(false);
@@ -772,24 +778,25 @@ function Niveau2Ligne({
 
   const handleAnnuler = () => {
     setLibelle(item.libelle);
-    setNiveau1(item.niveau1);
     setErrors({});
     setErreur(null);
     setEdition(false);
   };
 
   const handleEnregistrer = async () => {
-    const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1 });
+    // niveau1 n'est plus éditable ici (voir commentaire au-dessus du
+    // composant) : toujours celui du type, jamais `null` en pratique.
+    const erreursValidation = validateTypeDepenseNiveau2Form({ libelle, niveau1: item.niveau1 });
     setErrors(erreursValidation);
 
-    if (Object.keys(erreursValidation).length > 0 || niveau1 === null) {
+    if (Object.keys(erreursValidation).length > 0) {
       return;
     }
 
     setErreur(null);
     setEnregistrement(true);
     try {
-      await updateTypeDepenseNiveau2(item.id, libelle.trim(), niveau1);
+      await updateTypeDepenseNiveau2(item.id, libelle.trim(), item.niveau1);
       setEdition(false);
     } catch {
       setErreur('La sauvegarde a échoué, réessayez.');
@@ -850,13 +857,7 @@ function Niveau2Ligne({
     setAjoutEnregistrement(true);
     try {
       const [ligneCreee] = await createTypeDepenseNiveau3(item.id, ajoutLibelle.trim());
-      // Fixe : reconduit à partir de maintenant (historisation, #9). Variable
-      // : saisi pour le seul mois affiché (`mois`), jamais reconduit (#52).
-      if (item.niveau1 === 'fixe') {
-        await setMontantDepenseNiveau3(ligneCreee.id, mois, montantEnCentimes);
-      } else {
-        await setMontantDepenseVariable(ligneCreee.id, mois, montantEnCentimes);
-      }
+      await enregistrerMontantNiveau3(item.niveau1, ligneCreee.id, mois, montantEnCentimes);
       // La nouvelle ligne niveau 3 doit apparaître immédiatement (voir spec
       // du ticket) : on déplie la ligne niveau 2 même si elle était repliée
       // avant l'ajout.
@@ -959,17 +960,6 @@ function Niveau2Ligne({
             </ThemedText>
           ) : null}
         </ThemedView>
-
-        <Niveau1Selector
-          valeur={niveau1}
-          onChanger={setNiveau1}
-          accessibilityLabelPrefix={`Type de dépense ${libelleAccessible}`}
-        />
-        {errors.niveau1 ? (
-          <ThemedText type="small" themeColor="danger">
-            {errors.niveau1}
-          </ThemedText>
-        ) : null}
       </AjoutPopup>
 
       <AjoutPopup
@@ -1143,11 +1133,7 @@ function TypeDepenseNiveau3Row({
       if (montantSaisieTrim.length > 0) {
         const montantEnCentimes = parseMontantEnCentimes(montantSaisieTrim);
         if (montantEnCentimes !== null && montantEnCentimes !== montant) {
-          if (niveau1 === 'fixe') {
-            await setMontantDepenseNiveau3(item.id, mois, montantEnCentimes);
-          } else {
-            await setMontantDepenseVariable(item.id, mois, montantEnCentimes);
-          }
+          await enregistrerMontantNiveau3(niveau1, item.id, mois, montantEnCentimes);
         }
       }
 
@@ -1181,11 +1167,7 @@ function TypeDepenseNiveau3Row({
     setErreur(null);
     setEnregistrement(true);
     try {
-      if (niveau1 === 'fixe') {
-        await setMontantDepenseNiveau3(item.id, mois, null);
-      } else {
-        await deleteMontantDepenseVariable(item.id, mois);
-      }
+      await effacerMontantNiveau3(niveau1, item.id, mois);
       if (monte.current) {
         setMontantSaisie('');
       }
@@ -1827,18 +1809,6 @@ const styles = StyleSheet.create({
   },
   ajoutForm: {
     gap: Spacing.one,
-  },
-  niveau1Row: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  niveau1ChipWrapper: {
-    flex: 1,
-  },
-  niveau1Chip: {
-    alignItems: 'center',
-    borderRadius: Spacing.two,
-    paddingVertical: Spacing.two,
   },
   // Ligne niveau 2 — carte imbriquée dans le pavé niveau 1 (ticket #41).
   niveau2Card: {
