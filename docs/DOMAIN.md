@@ -55,14 +55,23 @@ Placement financier (niveau 2)
 
 Cette hiérarchie (niveaux 2 et 3) est **éditable sur la page d'édition du compte bancaire**.
 
-### 3.3 Montant d'un type de dépense (niveau 3) — historisation
+### 3.3 Montant d'un type de dépense (niveau 3) — deux sémantiques distinctes selon le niveau 1
 
-Chaque type de dépense de niveau 3 a un **montant défini par l'utilisateur**, qui :
+Chaque type de dépense de niveau 3 a un **montant défini par l'utilisateur**, mais la façon dont ce montant persiste d'un mois à l'autre dépend du niveau 1 (fixe/variable) de son type niveau 2 parent — voir ticket #52 pour l'historique de cette clarification.
+
+**Fixe** — le montant :
 
 - est **reconduit automatiquement chaque mois** par défaut,
 - peut **évoluer dans le temps**, ou **disparaître/réapparaître** d'un mois à l'autre.
 
-**Contrainte technique explicite** : il ne faut **pas dupliquer l'information en base à chaque mois** si le montant ne change pas. Le stockage doit utiliser un système d'**historisation par changement** (type SCD / "effective dating") : on n'enregistre une nouvelle ligne que lorsqu'un montant change (ou disparaît/réapparaît), et le montant applicable à un mois donné se résout en cherchant la dernière valeur connue à cette date. Le détail du schéma (table de valeurs avec date d'effet, gestion de la "disparition" d'une dépense un mois donné) reste à concevoir lors du ticket technique dédié.
+**Contrainte technique explicite (fixe uniquement)** : il ne faut **pas dupliquer l'information en base à chaque mois** si le montant ne change pas. Le stockage utilise un système d'**historisation par changement** (type SCD / "effective dating") : on n'enregistre une nouvelle ligne que lorsqu'un montant change (ou disparaît/réapparaît), et le montant applicable à un mois donné se résout en cherchant la dernière valeur connue à cette date (voir `docs/technique/schema-donnees.md`).
+
+**Variable** — le montant :
+
+- doit être **saisi indépendamment pour chaque mois calendaire** : il n'est **jamais reconduit** d'un mois à l'autre, contrairement au fixe.
+- si l'utilisateur ne saisit rien pour une dépense variable un mois donné, elle est simplement **absente ce mois-là** — **aucune ligne n'est enregistrée en base** pour marquer cette absence (pas de valeur `null` comme pour le mécanisme de "disparition" du fixe, qui ne s'applique pas ici).
+
+La sélection du mois à saisir pour une dépense variable se fait via un sélecteur de mois dédié dans l'onglet Dépenses (voir §3.7 et ticket #52), indépendant du mois affiché pour le fixe (toujours le mois courant).
 
 ### 3.4 Revenu
 
@@ -93,7 +102,8 @@ Entités détaillées (attributs complets, contraintes de validation, schéma Dr
 
 - **Création d'un compte** : depuis le bouton "+" (page d'accueil), saisie nom + banque.
 - **Édition d'un compte** : modification nom/banque, gestion du référentiel de types de dépenses (niveaux 2/3, propre à ce compte).
-- **Saisie/évolution du montant d'une dépense (niveau 3)** : l'utilisateur définit ou met à jour un montant ; le système historise le changement sans dupliquer les mois où le montant n'a pas bougé (voir 3.3).
+- **Saisie/évolution du montant d'une dépense (niveau 3) fixe** : l'utilisateur définit ou met à jour un montant ; le système historise le changement sans dupliquer les mois où le montant n'a pas bougé (voir 3.3).
+- **Saisie du montant d'une dépense (niveau 3) variable** : l'utilisateur sélectionne le mois concerné (sélecteur dédié dans l'onglet Dépenses), puis saisit un montant pour ce mois précis uniquement — aucune reconduction, aucun impact sur les autres mois (voir 3.3, ticket #52).
 - **Saisie d'un revenu** : depuis la page de détail d'un mois, bouton "+".
 - **Consultation du récapitulatif mensuel** : liste des mois d'un compte (desc.) → détail d'un mois (dépenses par niveau + revenus).
 - **Rappel mensuel** : notification locale le 1er de chaque mois pour inciter à saisir les revenus du mois.
@@ -103,7 +113,8 @@ Entités détaillées (attributs complets, contraintes de validation, schéma Dr
 - **Les budgets et montants ne sont jamais additionnés entre comptes.** Chaque compte bancaire a son propre budget mensuel, son propre calcul de montant disponible, et sa propre vue dans l'UI — de façon totalement indépendante des autres comptes de l'utilisateur.
 - **Les types de dépenses (niveaux 1/2/3) sont propres à un compte** — pas de référentiel partagé entre comptes.
 - **Le niveau 1 (fixe/variable) est toujours dérivé** : il est fixé à la création d'un type niveau 2, jamais saisi indépendamment.
-- **Pas de duplication de montant en base pour les mois sans changement** — historisation par changement obligatoire pour les montants de type de dépense (niveau 3).
+- **Pas de duplication de montant en base pour les mois sans changement** — historisation par changement obligatoire pour les montants de type de dépense (niveau 3) **fixe**.
+- **Un montant variable n'est jamais reconduit d'un mois à l'autre** — chaque mois calendaire nécessite sa propre saisie ; l'absence de saisie pour un mois donné ne crée aucune ligne en base (voir §3.3, ticket #52).
 - **Suppression bloquée si historique existant** : un compte, ou un type de dépense (niveau 2/3), ne peut pas être supprimé s'il a déjà de l'historique associé (dépenses/revenus saisis sur un mois passé). Évite toute perte de données ; un mécanisme d'archivage pourra être introduit ultérieurement si le besoin se confirme.
 
 ## 5. Intégrations externes

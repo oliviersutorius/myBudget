@@ -16,15 +16,21 @@ import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
+import { deleteMontantDepenseVariable } from '@/db/queries/delete-montant-depense-variable';
 import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
 import { getMontantsHistoriqueCompteQuery } from '@/db/queries/get-montants-historique-compte';
+import { getMontantsVariableCompteQuery } from '@/db/queries/get-montants-variable-compte';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
-import { resolveMontantsNiveau3Compte } from '@/db/queries/resolve-montants-niveau3-compte';
+import {
+  agregerMontantsNiveau3Compte,
+  resolveMontantsNiveau3Compte,
+} from '@/db/queries/resolve-montants-niveau3-compte';
 import { setMontantDepenseNiveau3 } from '@/db/queries/set-montant-depense-niveau3';
+import { setMontantDepenseVariable } from '@/db/queries/set-montant-depense-variable';
 import { updateCompte } from '@/db/queries/update-compte';
 import { updateRevenu } from '@/db/queries/update-revenu';
 import { updateTypeDepenseNiveau2 } from '@/db/queries/update-type-depense-niveau2';
@@ -90,6 +96,40 @@ const MOIS_LIBELLES = [
 function moisCourant(): string {
   const maintenant = new Date();
   return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Sélecteur de mois navigable (‹ Mois Année ›), extrait de l'onglet Revenus
+// (ticket #12) pour être réutilisé par le pavé Variable de l'onglet
+// Dépenses (ticket #52) — même pattern visuel (styles.anneeSelectorRow/
+// anneeChevron, déjà partagés avec le sélecteur d'année de BudgetTab).
+function MoisSelector({ mois, onChanger }: { mois: string; onChanger: (mois: string) => void }) {
+  const [annee, moisIndex] = mois.split('-').map(Number);
+
+  return (
+    <ThemedView style={styles.anneeSelectorRow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Mois précédent"
+        onPress={() => onChanger(decalerMois(mois, -1))}
+      >
+        <ThemedText type="title" style={styles.anneeChevron}>
+          ‹
+        </ThemedText>
+      </Pressable>
+      <ThemedText type="smallBold">
+        {MOIS_LIBELLES[moisIndex - 1]} {annee}
+      </ThemedText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Mois suivant"
+        onPress={() => onChanger(decalerMois(mois, 1))}
+      >
+        <ThemedText type="title" style={styles.anneeChevron}>
+          ›
+        </ThemedText>
+      </Pressable>
+    </ThemedView>
+  );
 }
 
 export default function EditionCompteScreen() {
@@ -465,22 +505,40 @@ function validerAjoutNiveau3(values: {
 
 function DepensesTab({ compteId }: { compteId: number }) {
   const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
-  // Une seule requête pour tout l'historique de montants du compte (ticket
-  // #9) plutôt qu'une par ligne niveau 3 : résolue et agrégée ci-dessous,
-  // puis distribuée aux lignes via montantsParType3 (voir
-  // resolveMontantsNiveau3Compte).
+
+  // Fixe : reconduit automatiquement, toujours affiché au mois courant, pas
+  // de sélecteur de mois (voir ticket #52 — inchangé par rapport à #9).
+  // Une seule requête pour tout l'historique de montants du compte plutôt
+  // qu'une par ligne niveau 3 : résolue et agrégée ci-dessous, puis
+  // distribuée aux lignes via montantsParType3 (resolveMontantsNiveau3Compte).
   const { data: historiqueCompte } = useLiveQuery(getMontantsHistoriqueCompteQuery(compteId), [
     compteId,
   ]);
-  const mois = moisCourant();
-  const { montantsParType3, sommeParNiveau2 } = useMemo(
-    () => resolveMontantsNiveau3Compte(historiqueCompte, mois),
-    [historiqueCompte, mois],
+  const moisFixe = moisCourant();
+  const { montantsParType3: montantsFixe, sommeParNiveau2: sommeFixe } = useMemo(
+    () => resolveMontantsNiveau3Compte(historiqueCompte, moisFixe),
+    [historiqueCompte, moisFixe],
   );
+
+  // Variable : jamais reconduit — un mois se sélectionne indépendamment du
+  // fixe (ticket #52). La requête filtre déjà sur ce mois exact (pas
+  // d'historique à charger/résoudre), donc agrégation directe.
+  const [moisVariable, setMoisVariable] = useState(() => moisCourant());
+  const { data: variableCompte } = useLiveQuery(
+    getMontantsVariableCompteQuery(compteId, moisVariable),
+    [compteId, moisVariable],
+  );
+  const { montantsParType3: montantsVariable, sommeParNiveau2: sommeVariable } = useMemo(
+    () => agregerMontantsNiveau3Compte(variableCompte),
+    [variableCompte],
+  );
+
   const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
   const typesVariable = types.filter((type) => type.niveau1 === 'variable');
-  const sommeNiveau1 = (typesDuNiveau1: TypeDepenseNiveau2[]) =>
-    typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
+  const sommeNiveau1 = (
+    typesDuNiveau1: TypeDepenseNiveau2[],
+    sommeParNiveau2: Map<number, number>,
+  ) => typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
 
   return (
     <ThemedView style={styles.section}>
@@ -489,18 +547,31 @@ function DepensesTab({ compteId }: { compteId: number }) {
         niveau1="fixe"
         titre={LIBELLE_NIVEAU1.fixe}
         types={typesFixe}
-        total={sommeNiveau1(typesFixe)}
-        montantsParType3={montantsParType3}
-        sommeParNiveau2={sommeParNiveau2}
+        total={sommeNiveau1(typesFixe, sommeFixe)}
+        montantsParType3={montantsFixe}
+        sommeParNiveau2={sommeFixe}
+        mois={moisFixe}
       />
+
+      <MoisSelector mois={moisVariable} onChanger={setMoisVariable} />
+
+      {/* `key={moisVariable}` : un changement de mois réinitialise l'état
+          local du pavé (lignes dépliées, formulaires d'ajout/édition
+          ouverts) plutôt que de tenter de le préserver — les données
+          affichées changent entièrement de mois, un formulaire resté ouvert
+          se retrouverait sinon silencieusement rattaché au nouveau mois
+          (même garde-fou que changerMois dans RevenusTab, ici obtenu par
+          remontage plutôt que par état levé). */}
       <Niveau1Pave
+        key={moisVariable}
         compteId={compteId}
         niveau1="variable"
         titre={LIBELLE_NIVEAU1.variable}
         types={typesVariable}
-        total={sommeNiveau1(typesVariable)}
-        montantsParType3={montantsParType3}
-        sommeParNiveau2={sommeParNiveau2}
+        total={sommeNiveau1(typesVariable, sommeVariable)}
+        montantsParType3={montantsVariable}
+        sommeParNiveau2={sommeVariable}
+        mois={moisVariable}
       />
     </ThemedView>
   );
@@ -519,6 +590,7 @@ function Niveau1Pave({
   total,
   montantsParType3,
   sommeParNiveau2,
+  mois,
 }: {
   compteId: number;
   niveau1: Niveau1;
@@ -527,6 +599,9 @@ function Niveau1Pave({
   total: number;
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
+  /** Mois dont dépendent les montants affichés/saisis sous ce pavé — mois
+   * courant (fixe) ou mois sélectionné (variable), voir DepensesTab. */
+  mois: string;
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(true);
@@ -609,6 +684,7 @@ function Niveau1Pave({
                 item={type}
                 montantsParType3={montantsParType3}
                 sommeParNiveau2={sommeParNiveau2}
+                mois={mois}
               />
             ))}
           </ThemedView>
@@ -662,10 +738,13 @@ function Niveau2Ligne({
   item,
   montantsParType3,
   sommeParNiveau2,
+  mois,
 }: {
   item: TypeDepenseNiveau2;
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
+  /** Mois dont dépendent les montants de ce pavé — voir Niveau1Pave. */
+  mois: string;
 }) {
   const theme = useTheme();
   const [ouvert, setOuvert] = useState(false);
@@ -771,7 +850,13 @@ function Niveau2Ligne({
     setAjoutEnregistrement(true);
     try {
       const [ligneCreee] = await createTypeDepenseNiveau3(item.id, ajoutLibelle.trim());
-      await setMontantDepenseNiveau3(ligneCreee.id, moisCourant(), montantEnCentimes);
+      // Fixe : reconduit à partir de maintenant (historisation, #9). Variable
+      // : saisi pour le seul mois affiché (`mois`), jamais reconduit (#52).
+      if (item.niveau1 === 'fixe') {
+        await setMontantDepenseNiveau3(ligneCreee.id, mois, montantEnCentimes);
+      } else {
+        await setMontantDepenseVariable(ligneCreee.id, mois, montantEnCentimes);
+      }
       // La nouvelle ligne niveau 3 doit apparaître immédiatement (voir spec
       // du ticket) : on déplie la ligne niveau 2 même si elle était repliée
       // avant l'ajout.
@@ -840,6 +925,8 @@ function Niveau2Ligne({
       {aEteOuvert ? (
         <Niveau3Liste
           niveau2Id={item.id}
+          niveau1={item.niveau1}
+          mois={mois}
           masque={!ouvert}
           montantsParType3={montantsParType3}
           contexte={`${item.libelle} · ${LIBELLE_NIVEAU1[item.niveau1]}`}
@@ -940,11 +1027,16 @@ function Niveau2Ligne({
 
 function Niveau3Liste({
   niveau2Id,
+  niveau1,
+  mois,
   masque,
   montantsParType3,
   contexte,
 }: {
   niveau2Id: number;
+  niveau1: Niveau1;
+  /** Mois dont dépendent les montants de ces lignes — voir Niveau1Pave. */
+  mois: string;
   masque: boolean;
   montantsParType3: MontantsParType3;
   /** Sous-titre contextuel des popups « Modifier » (ex. « Logement · Fixe »), voir Niveau2Ligne. */
@@ -963,6 +1055,8 @@ function Niveau3Liste({
           <TypeDepenseNiveau3Row
             key={sousType.id}
             item={sousType}
+            niveau1={niveau1}
+            mois={mois}
             montant={montantsParType3.get(sousType.id) ?? null}
             premiere={index === 0}
             contexte={contexte}
@@ -975,12 +1069,18 @@ function Niveau3Liste({
 
 function TypeDepenseNiveau3Row({
   item,
+  niveau1,
+  mois,
   montant,
   premiere,
   contexte,
 }: {
   item: TypeDepenseNiveau3;
-  /** Montant résolu au mois courant (voir DepensesTab), `null` = absente ce mois. */
+  niveau1: Niveau1;
+  /** Mois dont dépend le montant affiché/saisi ci-dessous — voir Niveau1Pave. */
+  mois: string;
+  /** Montant résolu au mois affiché (voir DepensesTab) : `null` = absente
+   * (fixe) ou non saisie (variable) ce mois-là. */
   montant: number | null;
   /** Première ligne de la liste : pas de séparateur au-dessus (voir Niveau3Liste). */
   premiere: boolean;
@@ -1033,15 +1133,21 @@ function TypeDepenseNiveau3Row({
       await updateTypeDepenseNiveau3(item.id, libelle.trim());
 
       // Un champ montant vide signifie « pas de changement de montant » (la
-      // validation ci-dessus l'accepte) — ce n'est pas ainsi qu'on marque
-      // une dépense absente, voir « Marquer absente » plus bas. Une saisie
-      // identique au montant déjà résolu n'est pas non plus réécrite : pas
-      // de duplication en base pour un mois sans changement (voir #9).
+      // validation ci-dessus l'accepte) — ce n'est pas ainsi qu'on marque une
+      // dépense absente/non saisie, voir « Marquer absente »/« Effacer la
+      // saisie de ce mois » plus bas. Une saisie identique au montant déjà
+      // résolu n'est pas non plus réécrite : pas de duplication en base pour
+      // un mois sans changement (voir #9 pour le fixe ; sans objet pour le
+      // variable, qui n'a qu'une ligne par mois de toute façon, voir #52).
       const montantSaisieTrim = montantSaisie.trim();
       if (montantSaisieTrim.length > 0) {
         const montantEnCentimes = parseMontantEnCentimes(montantSaisieTrim);
         if (montantEnCentimes !== null && montantEnCentimes !== montant) {
-          await setMontantDepenseNiveau3(item.id, moisCourant(), montantEnCentimes);
+          if (niveau1 === 'fixe') {
+            await setMontantDepenseNiveau3(item.id, mois, montantEnCentimes);
+          } else {
+            await setMontantDepenseVariable(item.id, mois, montantEnCentimes);
+          }
         }
       }
 
@@ -1059,19 +1165,27 @@ function TypeDepenseNiveau3Row({
     }
   };
 
-  const marquerAbsente = async () => {
+  // Fixe : « Marquer absente » historise une valeur `null` à partir de ce
+  // mois (reconduite ensuite, voir #9). Variable : pas de reconduction donc
+  // pas de valeur `null` à historiser — « Effacer la saisie de ce mois »
+  // supprime simplement la ligne (type, mois), voir #52.
+  const effacerMontantDuMois = async () => {
     // Alert.alert ne permet pas de désactiver une entrée du menu ⋮
     // individuellement (voir ActionsMenuButton, dont le `disabled` ne gate
     // que `suppression`) : on protège donc ici contre un appel concurrent à
     // un enregistrement déjà en cours sur cette même ligne (double-tap, ou
-    // Modifier + Marquer absente enchaînés rapidement).
+    // Modifier + Marquer absente/Effacer enchaînés rapidement).
     if (enregistrement || suppression) {
       return;
     }
     setErreur(null);
     setEnregistrement(true);
     try {
-      await setMontantDepenseNiveau3(item.id, moisCourant(), null);
+      if (niveau1 === 'fixe') {
+        await setMontantDepenseNiveau3(item.id, mois, null);
+      } else {
+        await deleteMontantDepenseVariable(item.id, mois);
+      }
       if (monte.current) {
         setMontantSaisie('');
       }
@@ -1134,7 +1248,7 @@ function TypeDepenseNiveau3Row({
           </ThemedText>
           {montant === null ? (
             <ThemedText type="small" themeColor="textSecondary">
-              Absente ce mois
+              {niveau1 === 'fixe' ? 'Absente ce mois' : 'Non saisie ce mois'}
             </ThemedText>
           ) : (
             <ThemedText type="small" style={styles.tabularNums}>
@@ -1167,7 +1281,15 @@ function TypeDepenseNiveau3Row({
                   setEdition(true);
                 },
               },
-              ...(montant !== null ? [{ label: 'Marquer absente', onPress: marquerAbsente }] : []),
+              ...(montant !== null
+                ? [
+                    {
+                      label:
+                        niveau1 === 'fixe' ? 'Marquer absente' : 'Effacer la saisie de ce mois',
+                      onPress: effacerMontantDuMois,
+                    },
+                  ]
+                : []),
               { label: 'Supprimer', onPress: handleSupprimer, destructive: true },
             ]}
           />
@@ -1254,7 +1376,6 @@ function RevenusTab({ compteId }: { compteId: number }) {
   const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
   const [formulaire, setFormulaire] = useState<RevenuFormulaireEtat>(null);
   const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
-  const [annee, moisIndex] = mois.split('-').map(Number);
 
   // Si le revenu en cours de modification a été supprimé entre-temps (ex.
   // depuis le menu ⋮ de sa propre ligne pendant que le formulaire était
@@ -1269,38 +1390,16 @@ function RevenusTab({ compteId }: { compteId: number }) {
   // Changer de mois ferme le formulaire ouvert : un ajout/une modification
   // en cours ne doit pas se retrouver silencieusement rattaché(e) à un
   // autre mois que celui affiché à l'écran au moment de l'ouverture.
-  const changerMois = (delta: number) => {
+  const changerMois = (nouveauMois: string) => {
     setFormulaire(null);
-    setMois((valeur) => decalerMois(valeur, delta));
+    setMois(nouveauMois);
   };
 
   return (
     <ThemedView style={styles.section}>
       <ThemedText type="smallBold">Revenus</ThemedText>
 
-      <ThemedView style={styles.anneeSelectorRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mois précédent"
-          onPress={() => changerMois(-1)}
-        >
-          <ThemedText type="title" style={styles.anneeChevron}>
-            ‹
-          </ThemedText>
-        </Pressable>
-        <ThemedText type="smallBold">
-          {MOIS_LIBELLES[moisIndex - 1]} {annee}
-        </ThemedText>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mois suivant"
-          onPress={() => changerMois(1)}
-        >
-          <ThemedText type="title" style={styles.anneeChevron}>
-            ›
-          </ThemedText>
-        </Pressable>
-      </ThemedView>
+      <MoisSelector mois={mois} onChanger={changerMois} />
 
       {revenusDuMois.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">

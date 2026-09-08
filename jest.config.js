@@ -37,6 +37,9 @@ module.exports = {
     '!src/db/queries/delete-revenu.ts', // idem : suppression mince
     '!src/db/queries/get-montants-historique-compte.ts', // idem : requête déclarative pure
     '!src/db/queries/set-montant-depense-niveau3.ts', // idem : upsert mince, validation testée séparément (validate-type-depense-niveau3-form.ts)
+    '!src/db/queries/get-montants-variable-compte.ts', // idem : requête déclarative pure (ticket #52)
+    '!src/db/queries/set-montant-depense-variable.ts', // idem : upsert mince, validation testée séparément (validate-type-depense-niveau3-form.ts) (ticket #52)
+    '!src/db/queries/delete-montant-depense-variable.ts', // idem : suppression mince (ticket #52)
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro
     '!src/components/animated-icon.web.tsx',
     '!src/components/icons.tsx', // icônes SVG purement présentationnelles (ticket #41) — pas de logique à tester

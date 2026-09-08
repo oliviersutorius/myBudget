@@ -1,4 +1,7 @@
-import { resolveMontantsNiveau3Compte } from './resolve-montants-niveau3-compte';
+import {
+  agregerMontantsNiveau3Compte,
+  resolveMontantsNiveau3Compte,
+} from './resolve-montants-niveau3-compte';
 
 describe('resolveMontantsNiveau3Compte', () => {
   it("retourne des maps vides quand l'historique est vide", () => {
@@ -74,5 +77,63 @@ describe('resolveMontantsNiveau3Compte', () => {
 
     expect(resolveMontantsNiveau3Compte(lignes, '2026-04').sommeParNiveau2.get(10)).toBe(0);
     expect(resolveMontantsNiveau3Compte(lignes, '2026-05').sommeParNiveau2.get(10)).toBe(4500);
+  });
+});
+
+// Utilisée directement pour le variable (ticket #52) : ces lignes sont déjà
+// résolues pour un mois exact (pas d'historique/reconduction à parcourir),
+// contrairement à resolveMontantsNiveau3Compte ci-dessus (fixe).
+describe('agregerMontantsNiveau3Compte', () => {
+  it('retourne des maps vides sans lignes', () => {
+    const resultat = agregerMontantsNiveau3Compte([]);
+
+    expect(resultat.montantsParType3.size).toBe(0);
+    expect(resultat.sommeParNiveau2.size).toBe(0);
+  });
+
+  it('somme plusieurs types niveau 3 sous le même niveau 2', () => {
+    const lignes = [
+      { typeDepenseNiveau3Id: 1, niveau2Id: 10, montant: 2000 },
+      { typeDepenseNiveau3Id: 2, niveau2Id: 10, montant: 1500 },
+    ];
+
+    const resultat = agregerMontantsNiveau3Compte(lignes);
+
+    expect(resultat.montantsParType3.get(1)).toBe(2000);
+    expect(resultat.montantsParType3.get(2)).toBe(1500);
+    expect(resultat.sommeParNiveau2.get(10)).toBe(3500);
+  });
+
+  it('sépare les sommes de deux niveau 2 différents', () => {
+    const lignes = [
+      { typeDepenseNiveau3Id: 1, niveau2Id: 10, montant: 2000 },
+      { typeDepenseNiveau3Id: 2, niveau2Id: 20, montant: 1500 },
+    ];
+
+    const resultat = agregerMontantsNiveau3Compte(lignes);
+
+    expect(resultat.sommeParNiveau2.get(10)).toBe(2000);
+    expect(resultat.sommeParNiveau2.get(20)).toBe(1500);
+  });
+
+  it('compte un montant null pour 0 dans la somme mais le garde dans montantsParType3', () => {
+    const lignes = [
+      { typeDepenseNiveau3Id: 1, niveau2Id: 10, montant: null },
+      { typeDepenseNiveau3Id: 2, niveau2Id: 10, montant: 3000 },
+    ];
+
+    const resultat = agregerMontantsNiveau3Compte(lignes);
+
+    expect(resultat.montantsParType3.get(1)).toBeNull();
+    expect(resultat.sommeParNiveau2.get(10)).toBe(3000);
+  });
+
+  it("un type niveau 3 sans ligne n'apparaît pas dans montantsParType3 (non saisi ce mois, cas variable)", () => {
+    const resultat = agregerMontantsNiveau3Compte([
+      { typeDepenseNiveau3Id: 2, niveau2Id: 10, montant: 3000 },
+    ]);
+
+    expect(resultat.montantsParType3.has(1)).toBe(false);
+    expect(resultat.sommeParNiveau2.get(10)).toBe(3000);
   });
 });
