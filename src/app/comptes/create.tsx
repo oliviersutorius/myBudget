@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { createCompte } from '@/db/queries/create-compte';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
 import { useTheme } from '@/hooks/use-theme';
+import { demanderPermissionNotificationsSiNecessaire } from '@/utils/notifications-permission';
 
 export default function CreationCompteScreen() {
   const router = useRouter();
@@ -31,6 +32,15 @@ export default function CreationCompteScreen() {
     setEnregistrement(true);
     try {
       await createCompte(nom.trim(), banque.trim());
+      // Fire-and-forget (ticket #19) : ne bloque jamais la navigation, et
+      // la fonction elle-même ne redéclenche le prompt système que si la
+      // permission n'a encore jamais été tranchée — appelée à chaque
+      // création de compte plutôt qu'à la seule toute première (ce moment
+      // reste jugé pertinent : l'utilisateur vient de créer quelque chose,
+      // la notion de rappel mensuel a du sens), pour rester en mesure de
+      // retenter si l'utilisateur avait quitté le prompt système sans y
+      // répondre lors d'une création précédente.
+      demanderPermissionNotificationsSiNecessaire();
       router.back();
     } catch {
       setErreurEnregistrement('La création a échoué, réessayez.');
