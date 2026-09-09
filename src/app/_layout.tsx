@@ -60,11 +60,16 @@ export default function RootLayout() {
   }, [migrationsReady]);
 
   useEffect(() => {
-    // Toujours vers l'accueil (liste des comptes), quel que soit le nombre
-    // de comptes de l'utilisateur — décision ticket #14 : pas de compte
-    // « pertinent » à deviner côté notification, chaque compte étant géré
-    // de façon totalement indépendante (voir CLAUDE.md).
+    // Un seul type de notification existe actuellement (le rappel #14) :
+    // simple comparaison d'identifiant plutôt qu'une table
+    // identifiant → route. Si un 2e type de notification apparaît un jour,
+    // remplacer par une table de correspondance à cet endroit précis — le
+    // seul point d'entrée du tap sur une notification, cold start compris.
     const ouvrirAccueilSiRappelRevenus = (reponse: Notifications.NotificationResponse) => {
+      // Toujours vers l'accueil (liste des comptes), quel que soit le
+      // nombre de comptes de l'utilisateur — décision ticket #14 : pas de
+      // compte « pertinent » à deviner côté notification, chaque compte
+      // étant géré de façon totalement indépendante (voir CLAUDE.md).
       if (reponse.notification.request.identifier === IDENTIFIANT_RAPPEL_REVENUS) {
         router.replace('/');
       }
@@ -73,9 +78,15 @@ export default function RootLayout() {
     // Cold start : l'app a été lancée par le tap sur la notification, la
     // réponse n'a donc pas encore été reçue par un listener (pas encore
     // monté au moment du tap) — il faut aller la chercher explicitement.
+    // `getLastNotificationResponseAsync` ne s'auto-efface pas : sans
+    // `clearLastNotificationResponseAsync` explicite ensuite, la même
+    // réponse serait revue (et reforcerait la navigation vers l'accueil) à
+    // chaque lancement futur de l'app, y compris des lancements normaux
+    // sans rapport avec une notification.
     Notifications.getLastNotificationResponseAsync().then((reponse) => {
       if (reponse) {
         ouvrirAccueilSiRappelRevenus(reponse);
+        Notifications.clearLastNotificationResponseAsync();
       }
     });
 
