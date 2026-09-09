@@ -24,7 +24,7 @@ appId: com.mybudget.app
 - tapOn: 'Ajouter un compte'
 - tapOn: 'Nom du compte'
 - inputText: 'Compte Test'
-- tapOn: 'Banque'
+- tapOn: 'Banque du compte'
 - inputText: 'Banque Test'
 - hideKeyboard
 - tapOn: 'Valider la création du compte'
@@ -53,7 +53,9 @@ appId: com.mybudget.app
 - inputText: '1200'
 - hideKeyboard
 - tapOn: 'Ajouter'
-- tapOn: '.*Déplier le type de dépense Loyer.*'
+# La ligne niveau 3 se déplie automatiquement dès son ajout (voir
+# handleAjouterNiveau3, comptes/[id]/edit.tsx) : pas de tap supplémentaire
+# nécessaire pour la révéler.
 - assertVisible: 'Loyer appartement'
 
 # --- Onglet Revenus : revenu sur le mois courant (sélecteur de mois déjà
