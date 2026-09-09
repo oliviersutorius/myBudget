@@ -38,4 +38,14 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
 
     expect(requestPermissionsAsyncMock).not.toHaveBeenCalled();
   });
+
+  it('n’échoue pas et signale en console une erreur inattendue plutôt que de la propager', async () => {
+    const avertissement = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    getPermissionsAsyncMock.mockRejectedValue(new Error('module natif indisponible'));
+
+    await expect(demanderPermissionNotificationsSiNecessaire()).resolves.toBeUndefined();
+
+    expect(avertissement).toHaveBeenCalledTimes(1);
+    avertissement.mockRestore();
+  });
 });
