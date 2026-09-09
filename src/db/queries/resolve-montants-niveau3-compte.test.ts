@@ -1,6 +1,7 @@
 import {
   agregerMontantsNiveau3Compte,
   resolveMontantsNiveau3Compte,
+  sommeTotale,
 } from './resolve-montants-niveau3-compte';
 
 describe('resolveMontantsNiveau3Compte', () => {
@@ -135,5 +136,21 @@ describe('agregerMontantsNiveau3Compte', () => {
 
     expect(resultat.montantsParType3.has(1)).toBe(false);
     expect(resultat.sommeParNiveau2.get(10)).toBe(3000);
+  });
+});
+
+describe('sommeTotale', () => {
+  it('vaut 0 pour une map vide', () => {
+    expect(sommeTotale(new Map())).toBe(0);
+  });
+
+  it('somme toutes les valeurs, tous types niveau 2 confondus', () => {
+    const somme = new Map([
+      [10, 5000],
+      [20, 3000],
+      [30, 1500],
+    ]);
+
+    expect(sommeTotale(somme)).toBe(9500);
   });
 });

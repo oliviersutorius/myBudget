@@ -15,10 +15,11 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Formulaire d'édition d'un compte.
 - Gestion des types de dépenses niveau 2 (Fixe/Variable) sur la page compte.
 - Gestion des types de dépenses niveau 3 sous un type niveau 2.
-- Page compte réorganisée en 4 onglets : Infos, Dépenses, Revenus, Budget (Revenus et Budget en coquilles fonctionnelles, en attendant les tickets #9/#12/#13).
+- Page compte réorganisée en 4 onglets : Infos, Dépenses, Revenus, Budget.
 - Onglet Revenus : ajout d'un revenu sur un mois donné, navigation mois par mois, modification et suppression d'un revenu (#12).
 - Types de dépenses niveau 3 : saisie et historisation du montant par mois, avec action « Marquer absente » pour un mois sans dépense (#9).
 - Suppression d'un compte depuis la page d'accueil (menu « ⋮ » Modifier/Supprimer, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16).
+- Onglet Budget : calcul et affichage du montant disponible du mois (revenus - dépenses fixe et variable), sur la ligne récapitulative de chaque mois et sur le détail d'un mois — jamais agrégé entre comptes (#13).
 
 ### Fixed
 

@@ -40,7 +40,7 @@ Vérifié via `npx expo export --platform android` (bundle Metro complet, migrat
 
 Résolution du montant applicable à un type niveau 3 pour un mois donné : `src/db/queries/resolve-montant-depense.ts` (logique pure, testée unitairement) — on retient la dernière entrée dont `mois_effet <= mois` demandé ; `montant = null` ou absence d'entrée applicable = dépense absente ce mois-là. Pour tout un compte (onglet Dépenses), `src/db/queries/get-montants-historique-compte.ts` charge en une seule requête (jointure sur les 3 tables) tout l'historique du compte, résolu ensuite par `resolve-montants-niveau3-compte.ts` (regroupement par type niveau 3 puis appel à `resolveMontantDepense` pour chacun) — voir `docs/technique/audit-47.md` §2 pour la mesure de performance de cette requête. Un wrapper équivalent pour un seul type niveau 3 (`get-montant-depense-niveau3.ts`) a existé mais n'avait plus d'appelant depuis l'introduction de cette requête batch ; retiré lors de l'audit #47.
 
-**Point ouvert** : la sémantique exacte de la date d'effet lors d'une saisie en cours de mois (le changement s'applique-t-il dès le mois en cours ou seulement le suivant ?) est à trancher dans le ticket #17 avant l'implémentation de la saisie (#9). Le schéma lui-même est agnostique à ce choix : il stocke un `mois_effet`, quelle que soit la règle retenue pour le calculer. **Concerne uniquement le fixe** (ticket #52) : la notion de date d'effet différée n'a pas de sens pour le variable, qui n'a pas de reconduction.
+**Date d'effet d'un changement en cours de mois** (ticket #17, tranché) : le changement s'applique **dès le mois en cours**, jamais différé au mois suivant — `setMontantDepenseNiveau3` est toujours appelé avec `moisEffet` = mois calendaire courant, quel que soit le jour de saisie (`src/app/comptes/[id]/edit.tsx`). Le schéma lui-même est agnostique à cette règle : il stocke un `mois_effet` au grain mois (pas de date exacte), donc aucune granularité "jour" n'aurait de toute façon été possible sans le faire évoluer. **Concerne uniquement le fixe** (ticket #52) : la notion de date d'effet différée n'a pas de sens pour le variable, qui n'a pas de reconduction.
 
 ## Montants variables (pas d'historisation)
 
@@ -49,6 +49,12 @@ Contrairement au fixe, `montants_depense_variable` ne modélise aucune reconduct
 Pour tout un compte à un mois donné (pavé Variable de l'onglet Dépenses), `src/db/queries/get-montants-variable-compte.ts` filtre directement en SQL sur ce mois (pas besoin de charger tout l'historique du compte comme pour le fixe), puis `agregerMontantsNiveau3Compte` (`resolve-montants-niveau3-compte.ts`) agrège par type niveau 2 parent — fonction également utilisée en interne par `resolveMontantsNiveau3Compte` (fixe) une fois l'historique résolu, pour ne pas dupliquer la logique de sommation.
 
 Le mois affiché/saisi pour le variable se sélectionne indépendamment du fixe (toujours au mois courant) via un sélecteur de mois dédié (composant `MoisSelector`, extrait du sélecteur déjà utilisé par l'onglet Revenus) positionné entre les pavés Fixe et Variable de l'onglet Dépenses.
+
+## Montant disponible (ticket #13)
+
+`src/db/queries/calculer-montant-disponible.ts` (logique pure, testée unitairement) calcule le montant disponible d'un compte pour un mois donné : revenus du mois moins la somme des dépenses fixe et variable de ce même mois, déjà résolues/agrégées en amont (`sommeParNiveau2` de `resolveMontantsNiveau3Compte` pour le fixe, de `agregerMontantsNiveau3Compte` pour le variable) — aucune agrégation entre comptes.
+
+Pour le récapitulatif mensuel (onglet Budget, `BudgetTab`), le montant disponible est affiché pour les 12 mois d'une année à la fois (liste des mois) ainsi que pour le mois sélectionné (détail) : plutôt qu'une requête par mois affiché, `src/db/queries/get-montants-variable-compte-annee.ts` et `src/db/queries/get-revenus-annee.ts` chargent respectivement le variable et les revenus de l'année entière en une seule requête chacune (filtrées en SQL via `LIKE 'YYYY-%'` sur `mois`), regroupés côté client par mois ; le fixe réutilise `get-montants-historique-compte.ts` (déjà compte-wide, sans filtre de mois) résolu 12 fois en mémoire via `resolveMontantsNiveau3Compte`.
 
 ## Montants monétaires
 

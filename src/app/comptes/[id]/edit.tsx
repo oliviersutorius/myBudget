@@ -20,14 +20,21 @@ import { deleteMontantDepenseVariable } from '@/db/queries/delete-montant-depens
 import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
 import { deleteTypeDepenseNiveau3 } from '@/db/queries/delete-type-depense-niveau3';
+import {
+  calculerMontantDisponible,
+  sommerMontants,
+} from '@/db/queries/calculer-montant-disponible';
 import { getMontantsHistoriqueCompteQuery } from '@/db/queries/get-montants-historique-compte';
 import { getMontantsVariableCompteQuery } from '@/db/queries/get-montants-variable-compte';
+import { getMontantsVariableCompteAnneeQuery } from '@/db/queries/get-montants-variable-compte-annee';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
+import { getRevenusAnneeQuery } from '@/db/queries/get-revenus-annee';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import {
   agregerMontantsNiveau3Compte,
   resolveMontantsNiveau3Compte,
+  sommeTotale,
 } from '@/db/queries/resolve-montants-niveau3-compte';
 import { setMontantDepenseNiveau3 } from '@/db/queries/set-montant-depense-niveau3';
 import { setMontantDepenseVariable } from '@/db/queries/set-montant-depense-variable';
@@ -56,6 +63,12 @@ type Onglet = 'infos' | 'depenses' | 'revenus' | 'budget';
 type TypeDepenseNiveau2 = Awaited<ReturnType<typeof getTypesDepenseNiveau2Query>>[number];
 type TypeDepenseNiveau3 = Awaited<ReturnType<typeof getTypesDepenseNiveau3Query>>[number];
 type Revenu = Awaited<ReturnType<typeof getRevenusQuery>>[number];
+// Historique compte-wide des montants de dépense fixe (voir
+// getMontantsHistoriqueCompteQuery) : chargé une seule fois par
+// EditionCompteScreen et partagé entre DepensesTab et BudgetTab (tous deux
+// résolvent cet historique pour un mois donné), plutôt qu'une souscription
+// live query par onglet sur la même requête.
+type HistoriqueCompte = Awaited<ReturnType<typeof getMontantsHistoriqueCompteQuery>>;
 type RevenuFormulaireEtat = { mode: 'ajout' } | { mode: 'edition'; revenu: Revenu } | null;
 // Montant résolu (mois courant) par type de dépense niveau 3 — voir
 // resolveMontantsNiveau3Compte. `undefined` (clé absente) et `null`
@@ -96,6 +109,25 @@ const MOIS_LIBELLES = [
 function moisCourant(): string {
   const maintenant = new Date();
   return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Regroupe une liste de lignes portant un champ `mois` ('YYYY-MM') par mois
+// — utilisé par BudgetTab (ticket #13) pour ne parcourir qu'une fois les
+// données d'une année entière (variable, revenus) plutôt qu'un `.filter()`
+// répété pour chacun des 12 mois affichés.
+function grouperParMois<T extends { mois: string }>(lignes: T[]): Map<string, T[]> {
+  const groupes = new Map<string, T[]>();
+
+  for (const ligne of lignes) {
+    const groupe = groupes.get(ligne.mois);
+    if (groupe) {
+      groupe.push(ligne);
+    } else {
+      groupes.set(ligne.mois, [ligne]);
+    }
+  }
+
+  return groupes;
 }
 
 // Sélecteur de mois navigable (‹ Mois Année ›), extrait de l'onglet Revenus
@@ -164,6 +196,13 @@ export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const compteId = Number(id);
   const theme = useTheme();
+
+  // Chargée une seule fois ici (plutôt que dans DepensesTab et BudgetTab
+  // séparément) : les deux onglets résolvent ce même historique compte-wide
+  // pour un mois donné, voir HistoriqueCompte ci-dessus.
+  const { data: historiqueCompte } = useLiveQuery(getMontantsHistoriqueCompteQuery(compteId), [
+    compteId,
+  ]);
 
   const [chargement, setChargement] = useState(true);
   const [introuvable, setIntrouvable] = useState(false);
@@ -346,7 +385,7 @@ export default function EditionCompteScreen() {
 
           {ongletsVisites.has('depenses') ? (
             <ThemedView style={onglet === 'depenses' ? undefined : styles.masqueDisplayNone}>
-              <DepensesTab compteId={compteId} />
+              <DepensesTab compteId={compteId} historiqueCompte={historiqueCompte} />
             </ThemedView>
           ) : null}
           {ongletsVisites.has('revenus') ? (
@@ -356,7 +395,7 @@ export default function EditionCompteScreen() {
           ) : null}
           {ongletsVisites.has('budget') ? (
             <ThemedView style={onglet === 'budget' ? undefined : styles.masqueDisplayNone}>
-              <BudgetTab />
+              <BudgetTab compteId={compteId} historiqueCompte={historiqueCompte} />
             </ThemedView>
           ) : null}
         </ScrollView>
@@ -500,17 +539,21 @@ function validerAjoutNiveau3(values: {
   return errors;
 }
 
-function DepensesTab({ compteId }: { compteId: number }) {
+function DepensesTab({
+  compteId,
+  historiqueCompte,
+}: {
+  compteId: number;
+  // Historique compte-wide de tous les montants de dépense fixe (chargé par
+  // EditionCompteScreen, partagé avec BudgetTab — voir HistoriqueCompte) :
+  // résolu et agrégé ci-dessous pour le mois affiché, puis distribué aux
+  // lignes via montantsParType3 (resolveMontantsNiveau3Compte).
+  historiqueCompte: HistoriqueCompte;
+}) {
   const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
 
   // Fixe : reconduit automatiquement, toujours affiché au mois courant, pas
   // de sélecteur de mois (voir ticket #52 — inchangé par rapport à #9).
-  // Une seule requête pour tout l'historique de montants du compte plutôt
-  // qu'une par ligne niveau 3 : résolue et agrégée ci-dessous, puis
-  // distribuée aux lignes via montantsParType3 (resolveMontantsNiveau3Compte).
-  const { data: historiqueCompte } = useLiveQuery(getMontantsHistoriqueCompteQuery(compteId), [
-    compteId,
-  ]);
   const moisFixe = moisCourant();
   const { montantsParType3: montantsFixe, sommeParNiveau2: sommeFixe } = useMemo(
     () => resolveMontantsNiveau3Compte(historiqueCompte, moisFixe),
@@ -1357,7 +1400,7 @@ function RevenusTab({ compteId }: { compteId: number }) {
   const [mois, setMois] = useState(() => moisCourant());
   const { data: revenusDuMois } = useLiveQuery(getRevenusQuery(compteId, mois), [compteId, mois]);
   const [formulaire, setFormulaire] = useState<RevenuFormulaireEtat>(null);
-  const total = revenusDuMois.reduce((somme, revenu) => somme + revenu.montant, 0);
+  const total = sommerMontants(revenusDuMois);
 
   // Si le revenu en cours de modification a été supprimé entre-temps (ex.
   // depuis le menu ⋮ de sa propre ligne pendant que le formulaire était
@@ -1642,15 +1685,77 @@ function RevenuForm({
   );
 }
 
-// Onglet placeholder pour la structure de navigation (sélecteur d'année,
-// liste des mois, détail d'un mois avec retour). Le contenu réel du détail
-// (répartition des dépenses, revenus, montant disponible) dépend des
-// tickets #9, #12 et #13 — voir ticket #34.
-function BudgetTab() {
+// Sélecteur d'année, liste des mois (montant disponible en ligne récap) et
+// détail d'un mois avec retour (ticket #13, sur la structure de navigation
+// posée par #34). Le fixe se résout à partir de l'historique compte-wide
+// (une seule requête, comme DepensesTab) ; le variable et les revenus se
+// chargent sur l'année affichée (une requête chacun) plutôt qu'un aller-
+// retour par mois affiché — voir get-montants-variable-compte-annee.ts et
+// get-revenus-annee.ts.
+function BudgetTab({
+  compteId,
+  historiqueCompte,
+}: {
+  compteId: number;
+  // Historique compte-wide de tous les montants de dépense fixe (chargé par
+  // EditionCompteScreen, partagé avec DepensesTab — voir HistoriqueCompte).
+  historiqueCompte: HistoriqueCompte;
+}) {
   const [annee, setAnnee] = useState(() => new Date().getFullYear());
   const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
 
+  const { data: variableAnnee } = useLiveQuery(
+    getMontantsVariableCompteAnneeQuery(compteId, annee),
+    [compteId, annee],
+  );
+  const { data: revenusAnnee } = useLiveQuery(getRevenusAnneeQuery(compteId, annee), [
+    compteId,
+    annee,
+  ]);
+
+  // Variable et revenus regroupés par mois une seule fois (plutôt qu'un
+  // `.filter()` sur tout le tableau de l'année à chacune des 12 itérations
+  // ci-dessous) — voir `grouperParMois`.
+  const variableParMois = useMemo(() => grouperParMois(variableAnnee), [variableAnnee]);
+  const revenusParMois = useMemo(() => grouperParMois(revenusAnnee), [revenusAnnee]);
+
+  // Montant disponible par mois (1-12) de l'année affichée — ni agrégé ni
+  // comparé entre comptes (règle métier #13), calculé uniquement à partir
+  // des données de `compteId`. Le fixe se résout une fois par mois via
+  // resolveMontantsNiveau3Compte (régénère son regroupement par type niveau
+  // 3 à chaque appel) plutôt que d'être pré-groupé comme le variable et les
+  // revenus : cette fonction est déjà testée et partagée avec DepensesTab,
+  // et l'historique d'un compte reste petit en pratique (données locales
+  // d'un particulier) — non retenu comme optimisation prioritaire.
+  const disponiblesParMois = useMemo(() => {
+    const resultat = new Map<number, number>();
+
+    for (let mois = 1; mois <= 12; mois++) {
+      const moisCle = `${annee}-${String(mois).padStart(2, '0')}`;
+      const { sommeParNiveau2: sommeFixe } = resolveMontantsNiveau3Compte(
+        historiqueCompte,
+        moisCle,
+      );
+      const { sommeParNiveau2: sommeVariable } = agregerMontantsNiveau3Compte(
+        variableParMois.get(moisCle) ?? [],
+      );
+
+      resultat.set(
+        mois,
+        calculerMontantDisponible({
+          sommeRevenus: sommerMontants(revenusParMois.get(moisCle) ?? []),
+          sommeDepensesFixe: sommeTotale(sommeFixe),
+          sommeDepensesVariable: sommeTotale(sommeVariable),
+        }),
+      );
+    }
+
+    return resultat;
+  }, [historiqueCompte, variableParMois, revenusParMois, annee]);
+
   if (moisSelectionne !== null) {
+    const disponible = disponiblesParMois.get(moisSelectionne) ?? 0;
+
     return (
       <ThemedView style={styles.section}>
         <Pressable
@@ -1664,8 +1769,22 @@ function BudgetTab() {
         <ThemedText type="smallBold">
           {MOIS_LIBELLES[moisSelectionne - 1]} {annee}
         </ThemedText>
+
+        <ThemedView style={styles.totalRow}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Montant disponible
+          </ThemedText>
+          <ThemedText
+            type="smallBold"
+            themeColor={disponible < 0 ? 'danger' : undefined}
+            style={styles.tabularNums}
+          >
+            {formatCentimesEnEuros(disponible)}
+          </ThemedText>
+        </ThemedView>
+
         <ThemedText type="small" themeColor="textSecondary">
-          Détail du mois à venir (dépend des tickets #9, #12, #13).
+          Détail des dépenses et revenus du mois : voir les onglets Dépenses et Revenus.
         </ThemedText>
       </ThemedView>
     );
@@ -1698,6 +1817,7 @@ function BudgetTab() {
       <ThemedView style={styles.typesList}>
         {MOIS_LIBELLES.map((libelleMois, index) => {
           const mois = 12 - index;
+          const disponible = disponiblesParMois.get(mois) ?? 0;
           return (
             <Pressable
               key={mois}
@@ -1707,8 +1827,12 @@ function BudgetTab() {
             >
               <ThemedView type="backgroundElement" style={styles.moisRow}>
                 <ThemedText type="small">{MOIS_LIBELLES[mois - 1]}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  — (à venir)
+                <ThemedText
+                  type="small"
+                  themeColor={disponible < 0 ? 'danger' : 'textSecondary'}
+                  style={styles.tabularNums}
+                >
+                  {formatCentimesEnEuros(disponible)}
                 </ThemedText>
               </ThemedView>
             </Pressable>
