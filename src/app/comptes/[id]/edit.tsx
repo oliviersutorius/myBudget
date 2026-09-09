@@ -395,7 +395,11 @@ export default function EditionCompteScreen() {
           ) : null}
           {ongletsVisites.has('budget') ? (
             <ThemedView style={onglet === 'budget' ? undefined : styles.masqueDisplayNone}>
-              <BudgetTab compteId={compteId} historiqueCompte={historiqueCompte} />
+              <BudgetTab
+                compteId={compteId}
+                historiqueCompte={historiqueCompte}
+                onAllerVersDepenses={() => changerOnglet('depenses')}
+              />
             </ThemedView>
           ) : null}
         </ScrollView>
@@ -1695,14 +1699,28 @@ function RevenuForm({
 function BudgetTab({
   compteId,
   historiqueCompte,
+  onAllerVersDepenses,
 }: {
   compteId: number;
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
   // EditionCompteScreen, partagé avec DepensesTab — voir HistoriqueCompte).
   historiqueCompte: HistoriqueCompte;
+  // Bascule vers l'onglet Dépenses (ticket #20, bandeau d'incitation
+  // ci-dessous) — géré par le parent (EditionCompteScreen) plutôt que par
+  // ce composant, qui n'a pas connaissance des autres onglets.
+  onAllerVersDepenses: () => void;
 }) {
   const [annee, setAnnee] = useState(() => new Date().getFullYear());
   const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
+
+  // Types de dépense niveau 2 du compte (même requête que DepensesTab) :
+  // sert uniquement à détecter le cas « compte fraîchement créé, aucun type
+  // défini » (ticket #20) pour afficher un bandeau d'incitation au-dessus de
+  // la liste des mois — le montant disponible affiché reste 0,00 € pour
+  // chaque mois tant qu'aucun type n'existe, sans que rien ne le distingue
+  // d'un mois réellement équilibré à 0.
+  const { data: typesNiveau2 } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
+  const aucunTypeDepense = typesNiveau2.length === 0;
 
   const { data: variableAnnee } = useLiveQuery(
     getMontantsVariableCompteAnneeQuery(compteId, annee),
@@ -1792,6 +1810,22 @@ function BudgetTab({
 
   return (
     <ThemedView style={styles.section}>
+      {aucunTypeDepense ? (
+        <ThemedView type="backgroundElement" style={styles.pave}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Aucun type de dépense défini pour l’instant — le montant disponible ci-dessous ne
+            reflète pas encore votre budget réel.
+          </ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Aller définir des types de dépense dans l’onglet Dépenses"
+            onPress={onAllerVersDepenses}
+          >
+            <ThemedText type="link">Définir mes types de dépense</ThemedText>
+          </Pressable>
+        </ThemedView>
+      ) : null}
+
       <ThemedView style={styles.anneeSelectorRow}>
         <Pressable
           accessibilityRole="button"
