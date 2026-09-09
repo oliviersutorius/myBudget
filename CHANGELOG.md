@@ -22,6 +22,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Onglet Budget : calcul et affichage du montant disponible du mois (revenus - dépenses fixe et variable), sur la ligne récapitulative de chaque mois et sur le détail d'un mois — jamais agrégé entre comptes (#13).
 - Onglet Budget : bandeau d'incitation à définir des types de dépense, affiché au-dessus de la liste des mois tant qu'aucun n'existe pour le compte — évite la confusion entre « compte pas encore configuré » et « budget réellement nul » (#20).
 - Demande de la permission de notifications à la création du premier compte, une seule fois (pas de redemande à chaque lancement une fois la décision de l'utilisateur prise) — prépare le rappel du 1er du mois (#14), sans qu'aucune fonctionnalité actuelle n'en dépende (#19).
+- Rappel local (100% hors connexion) le 1er de chaque mois à 9h, invitant à saisir ses revenus du mois — tap sur la notification → ouverture de l'accueil (liste des comptes), sans favoriser un compte plutôt qu'un autre (#14).
 
 ### Fixed
 

@@ -10,6 +10,7 @@ import { createCompte } from '@/db/queries/create-compte';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
 import { useTheme } from '@/hooks/use-theme';
 import { demanderPermissionNotificationsSiNecessaire } from '@/utils/notifications-permission';
+import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
 export default function CreationCompteScreen() {
   const router = useRouter();
@@ -39,8 +40,13 @@ export default function CreationCompteScreen() {
       // reste jugé pertinent : l'utilisateur vient de créer quelque chose,
       // la notion de rappel mensuel a du sens), pour rester en mesure de
       // retenter si l'utilisateur avait quitté le prompt système sans y
-      // répondre lors d'une création précédente.
-      demanderPermissionNotificationsSiNecessaire();
+      // répondre lors d'une création précédente. Enchaîné avec la
+      // programmation du rappel (ticket #14) : si la permission vient
+      // d'être accordée à l'instant, le rappel est programmé dans la
+      // foulée plutôt que d'attendre le prochain lancement de l'app (voir
+      // aussi _layout.tsx, qui reprogramme à chaque lancement si la
+      // permission est déjà acquise).
+      demanderPermissionNotificationsSiNecessaire().then(programmerRappelRevenusMensuel);
       router.back();
     } catch {
       setErreurEnregistrement('La création a échoué, réessayez.');
