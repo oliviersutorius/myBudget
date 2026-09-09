@@ -13,11 +13,6 @@ jest.mock('expo-notifications', () => ({ marqueur: 'module-expo-notifications-ch
 const estDansExpoGoMock = jest.mocked(estDansExpoGo);
 
 describe('chargerModuleNotifications', () => {
-  // `notificationsModule` est mis en cache au niveau du module (voir
-  // notifications-module.ts) : les tests s'appuient donc sur l'ordre de
-  // déclaration ci-dessous (Expo Go d'abord, pour vérifier qu'aucun
-  // chargement n'est mis en cache dans ce cas, avant de vérifier le
-  // chargement réel).
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -36,12 +31,39 @@ describe('chargerModuleNotifications', () => {
     });
   });
 
-  it('ne recharge pas le module à un appel suivant (mis en cache)', () => {
+  it('retourne la même référence à un appel suivant (déjà garanti par le cache de require(), voir commentaire du fichier)', () => {
     estDansExpoGoMock.mockReturnValue(false);
 
     const premierAppel = chargerModuleNotifications();
     const deuxiemeAppel = chargerModuleNotifications();
 
     expect(deuxiemeAppel).toBe(premierAppel);
+  });
+
+  // Dernier test du fichier : jest.resetModules() vide le registre de
+  // modules sans le restaurer ensuite (pas de test suivant à protéger ici).
+  // jest.doMock (par opposition au jest.mock hoisté en tête de fichier)
+  // permet de changer le mock d'expo-notifications pour ce seul require()
+  // frais, afin de simuler un échec du require lui-même (ex. module natif
+  // mal lié dans un dev client) plutôt que le cas Expo Go déjà couvert
+  // ci-dessus.
+  it('retourne null et signale en console si le require échoue de façon inattendue (hors Expo Go)', () => {
+    const avertissement = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    jest.resetModules();
+    jest.doMock('@/utils/expo-go', () => ({ estDansExpoGo: () => false }));
+    jest.doMock('expo-notifications', () => {
+      throw new Error('module natif indisponible');
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- require() nécessaire pour re-résoudre le module avec les doMock ci-dessus
+    const {
+      chargerModuleNotifications: chargerApresReset,
+    } = require('@/utils/notifications-module');
+
+    expect(chargerApresReset()).toBeNull();
+    expect(avertissement).toHaveBeenCalledTimes(1);
+
+    avertissement.mockRestore();
   });
 });

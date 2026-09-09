@@ -2,8 +2,6 @@ import { estDansExpoGo } from '@/utils/expo-go';
 
 type ModuleNotifications = typeof import('expo-notifications');
 
-let notificationsModule: ModuleNotifications | null | undefined;
-
 /**
  * Charge `expo-notifications` en import différé — jamais un `import`
  * statique en tête de fichier : le module lève une exception dès son
@@ -24,23 +22,31 @@ let notificationsModule: ModuleNotifications | null | undefined;
  * reste tout aussi différé (jamais exécuté tant que cette fonction n'est
  * pas appelée) et fonctionne nativement dans les deux environnements.
  * Synchrone, contrairement à `import()` : pas d'`await` nécessaire côté
- * appelant.
+ * appelant. Pas de mise en cache manuelle du résultat : `require()`
+ * retourne déjà la même instance en mémoire à chaque appel (comportement
+ * du système de modules, CommonJS comme Metro), une variable dédiée ici
+ * n'aurait fait que dupliquer ce que `require()` fait déjà gratuitement.
  *
- * Retourne `null` sans même tenter le `require` dans Expo Go — les
- * fonctions appelantes deviennent alors des no-op silencieux (voir leur
- * propre documentation) plutôt que d'échouer. Le résultat hors Expo Go est
- * mis en cache (chargé une seule fois par session, comme un `import`
- * statique classique l'aurait fait).
+ * Ne lève jamais : retourne `null` sans même tenter le `require` dans Expo
+ * Go, et intercepte aussi un échec inattendu du `require` lui-même (ex.
+ * module natif mal lié dans un dev client) plutôt que de laisser
+ * l'exception remonter jusqu'à l'appelant — les fonctions appelantes
+ * deviennent alors des no-op silencieux (voir leur propre documentation)
+ * plutôt que de faire planter l'app entière au chargement, y compris dans
+ * les deux effets de `_layout.tsx` qui appellent cette fonction en dehors
+ * de tout `try`/`catch` (le montage de l'app entière, avant tout
+ * ErrorBoundary).
  */
 export function chargerModuleNotifications(): ModuleNotifications | null {
   if (estDansExpoGo()) {
     return null;
   }
 
-  if (notificationsModule === undefined) {
+  try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- import différé volontaire, voir commentaire ci-dessus
-    notificationsModule = require('expo-notifications') as ModuleNotifications;
+    return require('expo-notifications') as ModuleNotifications;
+  } catch (error) {
+    console.warn('Échec du chargement du module de notifications :', error);
+    return null;
   }
-
-  return notificationsModule;
 }

@@ -22,9 +22,13 @@ SplashScreen.preventAutoHideAsync();
 // 1er du mois, ticket #14) ne s'afficherait pas du tout — comportement par
 // défaut d'expo-notifications, qui viderait le rappel de son intérêt dans ce
 // cas précis. Appelé une seule fois au chargement du module, avant même le
-// montage de RootLayout — no-op dans Expo Go (voir notifications-module.ts),
-// `import type` ci-dessus n'ayant lui aucun effet à l'exécution (erasé à la
-// compilation, jamais un `import` réel du module).
+// montage de RootLayout — pas de try/catch nécessaire ici ni dans l'effet
+// ci-dessous qui appelle aussi chargerModuleNotifications() : cette fonction
+// ne lève jamais (Expo Go et tout échec inattendu du chargement lui-même y
+// sont interceptés, voir notifications-module.ts) — important à ce niveau
+// précis, exécuté avant tout ErrorBoundary. `import type` ci-dessus n'a lui
+// aucun effet à l'exécution (erasé à la compilation, jamais un `import` réel
+// du module).
 chargerModuleNotifications()?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -91,12 +95,19 @@ export default function RootLayout() {
     // réponse serait revue (et reforcerait la navigation vers l'accueil) à
     // chaque lancement futur de l'app, y compris des lancements normaux
     // sans rapport avec une notification.
-    Notifications.getLastNotificationResponseAsync().then((reponse) => {
-      if (reponse) {
-        ouvrirAccueilSiRappelRevenus(reponse);
-        Notifications.clearLastNotificationResponseAsync();
-      }
-    });
+    Notifications.getLastNotificationResponseAsync()
+      .then((reponse) => {
+        if (reponse) {
+          ouvrirAccueilSiRappelRevenus(reponse);
+          Notifications.clearLastNotificationResponseAsync();
+        }
+      })
+      .catch((error: unknown) => {
+        // Best-effort, comme le reste du code de notifications de ce
+        // projet (voir rappel-revenus.ts/notifications-permission.ts) :
+        // une erreur ici ne doit pas rester une rejection non gérée.
+        console.warn('Échec de la lecture de la dernière notification :', error);
+      });
 
     // App déjà ouverte (premier ou arrière-plan) au moment du tap.
     const abonnement = Notifications.addNotificationResponseReceivedListener(
