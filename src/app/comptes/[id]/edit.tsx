@@ -204,6 +204,19 @@ export default function EditionCompteScreen() {
     compteId,
   ]);
 
+  // Types de dépense niveau 2 du compte, même logique de partage que
+  // historiqueCompte ci-dessus (DepensesTab et BudgetTab en ont tous deux
+  // besoin — BudgetTab pour détecter l'absence de type, ticket #20).
+  // `typesNiveau2ChargeLe` (`undefined` tant que la requête n'a pas résolu
+  // une première fois, voir useLiveQuery) évite qu'un compte déjà configuré
+  // affiche brièvement le bandeau d'incitation le temps que la requête
+  // résolve — sans lui, `typesNiveau2` vaut `[]` sur le tout premier rendu.
+  const { data: typesNiveau2, updatedAt: typesNiveau2ChargeLe } = useLiveQuery(
+    getTypesDepenseNiveau2Query(compteId),
+    [compteId],
+  );
+  const aucunTypeDepense = typesNiveau2ChargeLe !== undefined && typesNiveau2.length === 0;
+
   const [chargement, setChargement] = useState(true);
   const [introuvable, setIntrouvable] = useState(false);
   const [nom, setNom] = useState('');
@@ -385,7 +398,11 @@ export default function EditionCompteScreen() {
 
           {ongletsVisites.has('depenses') ? (
             <ThemedView style={onglet === 'depenses' ? undefined : styles.masqueDisplayNone}>
-              <DepensesTab compteId={compteId} historiqueCompte={historiqueCompte} />
+              <DepensesTab
+                compteId={compteId}
+                historiqueCompte={historiqueCompte}
+                types={typesNiveau2}
+              />
             </ThemedView>
           ) : null}
           {ongletsVisites.has('revenus') ? (
@@ -398,6 +415,7 @@ export default function EditionCompteScreen() {
               <BudgetTab
                 compteId={compteId}
                 historiqueCompte={historiqueCompte}
+                aucunTypeDepense={aucunTypeDepense}
                 onAllerVersDepenses={() => changerOnglet('depenses')}
               />
             </ThemedView>
@@ -546,6 +564,7 @@ function validerAjoutNiveau3(values: {
 function DepensesTab({
   compteId,
   historiqueCompte,
+  types,
 }: {
   compteId: number;
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
@@ -553,9 +572,13 @@ function DepensesTab({
   // résolu et agrégé ci-dessous pour le mois affiché, puis distribué aux
   // lignes via montantsParType3 (resolveMontantsNiveau3Compte).
   historiqueCompte: HistoriqueCompte;
+  // Types de dépense niveau 2 du compte, chargés une seule fois par
+  // EditionCompteScreen (comme historiqueCompte ci-dessus) plutôt qu'ici :
+  // BudgetTab a besoin de la même requête pour détecter l'absence de type
+  // (ticket #20), la souscrire deux fois doublerait les lectures/écoutes
+  // sur cette table sans raison.
+  types: TypeDepenseNiveau2[];
 }) {
-  const { data: types } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
-
   // Fixe : reconduit automatiquement, toujours affiché au mois courant, pas
   // de sélecteur de mois (voir ticket #52 — inchangé par rapport à #9).
   const moisFixe = moisCourant();
@@ -1689,6 +1712,29 @@ function RevenuForm({
   );
 }
 
+// Bandeau d'incitation (ticket #20) affiché tant qu'aucun type de dépense
+// niveau 2 n'existe pour le compte — sur la liste des mois et sur le détail
+// d'un mois (un mois reste atteignable en tapant sa ligne même quand ce
+// bandeau est visible, voir BudgetTab), pour ne pas laisser un montant
+// disponible à 0,00 € sans le caveat une fois qu'on a tapé dedans.
+function IncitationTypeDepense({ onAllerVersDepenses }: { onAllerVersDepenses: () => void }) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.pave}>
+      <ThemedText type="small" themeColor="textSecondary">
+        Aucun type de dépense défini pour l’instant — le montant disponible affiché ne reflète pas
+        encore votre budget réel.
+      </ThemedText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Aller définir des types de dépense dans l’onglet Dépenses"
+        onPress={onAllerVersDepenses}
+      >
+        <ThemedText type="link">Définir mes types de dépense</ThemedText>
+      </Pressable>
+    </ThemedView>
+  );
+}
+
 // Sélecteur d'année, liste des mois (montant disponible en ligne récap) et
 // détail d'un mois avec retour (ticket #13, sur la structure de navigation
 // posée par #34). Le fixe se résout à partir de l'historique compte-wide
@@ -1699,28 +1745,28 @@ function RevenuForm({
 function BudgetTab({
   compteId,
   historiqueCompte,
+  aucunTypeDepense,
   onAllerVersDepenses,
 }: {
   compteId: number;
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
   // EditionCompteScreen, partagé avec DepensesTab — voir HistoriqueCompte).
   historiqueCompte: HistoriqueCompte;
+  // Vrai si le compte n'a encore aucun type de dépense niveau 2 (ticket
+  // #20) : calculé une fois par EditionCompteScreen à partir de la même
+  // requête que DepensesTab plutôt que d'être re-résolu ici, pour éviter
+  // une deuxième souscription live sur la même table/compteId (voir
+  // HistoriqueCompte ci-dessus, même logique de partage) — et pour éviter
+  // qu'un flash du bandeau apparaisse ici avant que la requête, chargée par
+  // le parent, ait résolu une première fois.
+  aucunTypeDepense: boolean;
   // Bascule vers l'onglet Dépenses (ticket #20, bandeau d'incitation
-  // ci-dessous) — géré par le parent (EditionCompteScreen) plutôt que par
+  // ci-dessus) — géré par le parent (EditionCompteScreen) plutôt que par
   // ce composant, qui n'a pas connaissance des autres onglets.
   onAllerVersDepenses: () => void;
 }) {
   const [annee, setAnnee] = useState(() => new Date().getFullYear());
   const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
-
-  // Types de dépense niveau 2 du compte (même requête que DepensesTab) :
-  // sert uniquement à détecter le cas « compte fraîchement créé, aucun type
-  // défini » (ticket #20) pour afficher un bandeau d'incitation au-dessus de
-  // la liste des mois — le montant disponible affiché reste 0,00 € pour
-  // chaque mois tant qu'aucun type n'existe, sans que rien ne le distingue
-  // d'un mois réellement équilibré à 0.
-  const { data: typesNiveau2 } = useLiveQuery(getTypesDepenseNiveau2Query(compteId), [compteId]);
-  const aucunTypeDepense = typesNiveau2.length === 0;
 
   const { data: variableAnnee } = useLiveQuery(
     getMontantsVariableCompteAnneeQuery(compteId, annee),
@@ -1804,6 +1850,10 @@ function BudgetTab({
         <ThemedText type="small" themeColor="textSecondary">
           Détail des dépenses et revenus du mois : voir les onglets Dépenses et Revenus.
         </ThemedText>
+
+        {aucunTypeDepense ? (
+          <IncitationTypeDepense onAllerVersDepenses={onAllerVersDepenses} />
+        ) : null}
       </ThemedView>
     );
   }
@@ -1811,19 +1861,7 @@ function BudgetTab({
   return (
     <ThemedView style={styles.section}>
       {aucunTypeDepense ? (
-        <ThemedView type="backgroundElement" style={styles.pave}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Aucun type de dépense défini pour l’instant — le montant disponible ci-dessous ne
-            reflète pas encore votre budget réel.
-          </ThemedText>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Aller définir des types de dépense dans l’onglet Dépenses"
-            onPress={onAllerVersDepenses}
-          >
-            <ThemedText type="link">Définir mes types de dépense</ThemedText>
-          </Pressable>
-        </ThemedView>
+        <IncitationTypeDepense onAllerVersDepenses={onAllerVersDepenses} />
       ) : null}
 
       <ThemedView style={styles.anneeSelectorRow}>
@@ -1922,6 +1960,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
   },
   // Pavé niveau 1 (Fixe/Variable) — maquette « A — Compact » (ticket #41).
+  // Réutilisé tel quel par IncitationTypeDepense (ticket #20) : mêmes
+  // gap/radius/padding de card que le reste de l'écran, pas de style dédié
+  // introduit pour ce second usage — un changement propre à la maquette du
+  // pavé niveau 1 doit rester compatible avec ce second usage, ou s'en
+  // détacher explicitement (nouveau style) plutôt que de diverger en douce.
   pave: {
     gap: Spacing.two,
     borderRadius: Spacing.three,
