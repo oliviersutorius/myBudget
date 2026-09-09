@@ -21,6 +21,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Suppression d'un compte depuis la page d'accueil (menu « ⋮ » Modifier/Supprimer, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16).
 - Onglet Budget : calcul et affichage du montant disponible du mois (revenus - dépenses fixe et variable), sur la ligne récapitulative de chaque mois et sur le détail d'un mois — jamais agrégé entre comptes (#13).
 - Onglet Budget : bandeau d'incitation à définir des types de dépense, affiché au-dessus de la liste des mois tant qu'aucun n'existe pour le compte — évite la confusion entre « compte pas encore configuré » et « budget réellement nul » (#20).
+- Demande de la permission de notifications à la création du premier compte, une seule fois (pas de redemande à chaque lancement une fois la décision de l'utilisateur prise) — prépare le rappel du 1er du mois (#14), sans qu'aucune fonctionnalité actuelle n'en dépende (#19).
 
 ### Fixed
 

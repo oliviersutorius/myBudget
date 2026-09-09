@@ -7,8 +7,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { createCompte } from '@/db/queries/create-compte';
+import { getComptesQuery } from '@/db/queries/get-comptes';
 import { validateCompteForm, type CompteFormErrors } from '@/forms/validate-compte-form';
 import { useTheme } from '@/hooks/use-theme';
+import { demanderPermissionNotificationsSiNecessaire } from '@/utils/notifications-permission';
 
 export default function CreationCompteScreen() {
   const router = useRouter();
@@ -30,7 +32,18 @@ export default function CreationCompteScreen() {
     setErreurEnregistrement(null);
     setEnregistrement(true);
     try {
+      // Vérifié avant l'insertion (pas de requête supplémentaire après) :
+      // s'il n'existait encore aucun compte, celui-ci est le premier — le
+      // moment jugé pertinent pour demander la permission de notifications
+      // (ticket #19), plutôt que dès le tout premier lancement de l'app,
+      // avant tout contexte donné à l'utilisateur.
+      const comptesExistants = await getComptesQuery();
       await createCompte(nom.trim(), banque.trim());
+      if (comptesExistants.length === 0) {
+        // Fire-and-forget : ne bloque jamais la navigation, l'app reste
+        // utilisable même si la demande échoue ou est refusée.
+        demanderPermissionNotificationsSiNecessaire().catch(() => {});
+      }
       router.back();
     } catch {
       setErreurEnregistrement('La création a échoué, réessayez.');
