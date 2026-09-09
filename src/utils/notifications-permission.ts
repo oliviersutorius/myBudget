@@ -1,4 +1,5 @@
-import * as Notifications from 'expo-notifications';
+import { chargerModuleNotifications } from '@/utils/notifications-module';
+import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
 /**
  * Demande la permission de notifications à l'utilisateur, uniquement si
@@ -11,24 +12,42 @@ import * as Notifications from 'expo-notifications';
  * appelant, à chaque moment jugé pertinent (voir comptes/create.tsx),
  * plutôt que de dupliquer la vérification à chaque site d'appel.
  *
+ * No-op dans Expo Go (voir notifications-module.ts) : la permission n'y
+ * est de toute façon jamais accessible pour ce module.
+ *
+ * Si la permission vient tout juste d'être accordée (la seule branche où
+ * elle était `undetermined`), programme dans la foulée le rappel du 1er du
+ * mois (ticket #14) plutôt que d'attendre le prochain lancement de l'app
+ * (voir aussi _layout.tsx, qui reprogramme à chaque lancement si la
+ * permission est déjà acquise) — mais pas quand la permission était déjà
+ * tranchée avant cet appel : `_layout.tsx` l'a déjà programmé dans ce cas,
+ * un aller-retour supplémentaire vers le pont natif serait redondant.
+ *
  * Ne fait jamais planter ni bloquer l'écran appelant : conçue pour être
  * utilisée en fire-and-forget (jamais de rejet, jamais d'`await` requis
  * côté appelant), l'app doit rester pleinement utilisable que la
- * permission soit accordée, refusée, ou pas encore demandée — aucune
- * fonctionnalité actuelle de myBudget n'en dépend (le rappel du 1er du
- * mois, ticket #14, n'est pas encore implémenté). Une erreur inattendue
- * (pas un simple refus, qui ne lève pas d'exception) est tout de même
- * signalée en console plutôt que silencieusement avalée : sinon, une
+ * permission soit accordée, refusée, ou pas encore demandée. Une erreur
+ * inattendue (pas un simple refus, qui ne lève pas d'exception) est tout de
+ * même signalée en console plutôt que silencieusement avalée : sinon, une
  * régression du flux de permission (ex. après une montée de version
- * d'Expo) passerait inaperçue jusqu'à ce que #14, construit dessus, ne se
- * déclenche jamais sans que personne ne sache pourquoi.
+ * d'Expo) passerait inaperçue jusqu'à ce que #14 ne se déclenche jamais
+ * sans que personne ne sache pourquoi.
  */
 export async function demanderPermissionNotificationsSiNecessaire(): Promise<void> {
   try {
-    const { status } = await Notifications.getPermissionsAsync();
+    const Notifications = chargerModuleNotifications();
+    if (!Notifications) {
+      return;
+    }
 
-    if (status === 'undetermined') {
-      await Notifications.requestPermissionsAsync();
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'undetermined') {
+      return;
+    }
+
+    const { status: nouveauStatus } = await Notifications.requestPermissionsAsync();
+    if (nouveauStatus === 'granted') {
+      await programmerRappelRevenusMensuel();
     }
   } catch (error) {
     console.warn('Échec de la demande de permission de notifications :', error);

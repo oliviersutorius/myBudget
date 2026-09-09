@@ -39,7 +39,10 @@ export default function CreationCompteScreen() {
       // reste jugé pertinent : l'utilisateur vient de créer quelque chose,
       // la notion de rappel mensuel a du sens), pour rester en mesure de
       // retenter si l'utilisateur avait quitté le prompt système sans y
-      // répondre lors d'une création précédente.
+      // répondre lors d'une création précédente. Si la permission vient
+      // d'être accordée à l'instant, elle programme elle-même le rappel du
+      // 1er du mois (ticket #14) dans la foulée plutôt que d'attendre le
+      // prochain lancement de l'app.
       demanderPermissionNotificationsSiNecessaire();
       router.back();
     } catch {
