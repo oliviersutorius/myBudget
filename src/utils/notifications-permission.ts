@@ -1,5 +1,4 @@
-import * as Notifications from 'expo-notifications';
-
+import { chargerModuleNotifications } from '@/utils/notifications-module';
 import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
 /**
@@ -12,6 +11,9 @@ import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
  * sans répondre au prompt système) : à appeler sans condition côté
  * appelant, à chaque moment jugé pertinent (voir comptes/create.tsx),
  * plutôt que de dupliquer la vérification à chaque site d'appel.
+ *
+ * No-op dans Expo Go (voir notifications-module.ts) : la permission n'y
+ * est de toute façon jamais accessible pour ce module.
  *
  * Si la permission vient tout juste d'être accordée (la seule branche où
  * elle était `undetermined`), programme dans la foulée le rappel du 1er du
@@ -33,8 +35,12 @@ import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
  */
 export async function demanderPermissionNotificationsSiNecessaire(): Promise<void> {
   try {
-    const { status } = await Notifications.getPermissionsAsync();
+    const Notifications = chargerModuleNotifications();
+    if (!Notifications) {
+      return;
+    }
 
+    const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'undetermined') {
       return;
     }

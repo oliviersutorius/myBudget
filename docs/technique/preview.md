@@ -4,7 +4,7 @@
 
 ## Méthode retenue : Expo Go
 
-Pas de dev client nécessaire à ce stade du projet : tous les modules natifs actuellement utilisés sont pris en charge par **Expo Go** (SDK 57) sans build personnalisé.
+Pas de dev client nécessaire à ce stade du projet : tous les modules natifs actuellement utilisés fonctionnent dans **Expo Go** (SDK 57) sans build personnalisé — `expo-notifications` (voir ci-dessous) est la seule exception, contournée plutôt que de faire basculer tout le projet sur un dev client.
 
 - `expo-sqlite` (base de données locale) est inclus dans Expo Go.
 - `@expo/ui` et `expo-glass-effect` fonctionnent dans Expo Go depuis les SDK 55/56 (installés dans ce projet mais pas encore utilisés dans l'UI).
@@ -13,6 +13,16 @@ Pas de dev client nécessaire à ce stade du projet : tous les modules natifs ac
 **Limite connue** : l'effet Liquid Glass d'`expo-glass-effect` est décrit comme moins fiable dans Expo Go que dans un vrai build — sans impact aujourd'hui puisqu'il n'est pas encore utilisé dans l'UI. À réévaluer si un écran l'utilise un jour.
 
 Si un futur module natif ajouté au projet n'est pas pris en charge par Expo Go, il faudra basculer sur un **dev client** (`npx expo run:ios` / `npx expo run:android` en local, ou `eas build --profile development` — build manuel, voir `docs/WORKFLOW.md`). Pas anticipé tant que le besoin ne se présente pas.
+
+### Exception : `expo-notifications` non supporté dans Expo Go depuis le SDK 53
+
+Ajouté par le ticket #19 sans que cette incompatibilité ait été vérifiée au préalable — a fait planter l'app entière au démarrage sous Expo Go dès son ajout (`expo-notifications: ... functionality provided by expo-notifications was removed from Expo Go with the release of SDK 53`), un simple `import` statique du module suffisant à déclencher l'erreur. Corrigé par un import différé plutôt qu'un basculement sur dev client (jugé disproportionné pour une seule dépendance, alors que tout le reste du projet reste servi par Expo Go) :
+
+- `src/utils/expo-go.ts` détecte Expo Go via `isRunningInExpoGo()` (paquet `expo`) — pas `expo-constants`/`executionEnvironment`, qui confond Expo Go et dev client sous la même valeur.
+- `src/utils/notifications-module.ts` charge `expo-notifications` via `require()` (pas un `import` statique en tête de fichier, ni un `import()` dynamique — inexploitable sous Jest dans ce projet sans flag expérimental), uniquement hors Expo Go, mis en cache après le premier chargement.
+- `src/utils/notifications-permission.ts`, `src/utils/rappel-revenus.ts` et `src/app/_layout.tsx` passent tous par ce chargeur : dans Expo Go, les fonctionnalités de notifications deviennent des no-op silencieux plutôt que de faire planter l'app.
+
+**Conséquence pour le développement au quotidien** : le rappel du 1er du mois (#14) et la demande de permission (#19) ne sont pas vérifiables dans Expo Go — seulement dans un dev client ou un build. Pas bloquant pour le reste du développement (le seul module concerné), mais à garder en tête avant de vérifier ces 2 fonctionnalités précises sur device.
 
 ## Lancer la preview
 

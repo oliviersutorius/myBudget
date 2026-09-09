@@ -1,5 +1,5 @@
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import * as Notifications from 'expo-notifications';
+import type { NotificationResponse } from 'expo-notifications';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -10,6 +10,7 @@ import { ConfirmationSuppressionPopup } from '@/components/confirmation-suppress
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { db } from '@/db/client';
+import { chargerModuleNotifications } from '@/utils/notifications-module';
 import { IDENTIFIANT_RAPPEL_REVENUS, programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
 import migrations from '../../drizzle/migrations';
@@ -21,8 +22,10 @@ SplashScreen.preventAutoHideAsync();
 // 1er du mois, ticket #14) ne s'afficherait pas du tout — comportement par
 // défaut d'expo-notifications, qui viderait le rappel de son intérêt dans ce
 // cas précis. Appelé une seule fois au chargement du module, avant même le
-// montage de RootLayout.
-Notifications.setNotificationHandler({
+// montage de RootLayout — no-op dans Expo Go (voir notifications-module.ts),
+// `import type` ci-dessus n'ayant lui aucun effet à l'exécution (erasé à la
+// compilation, jamais un `import` réel du module).
+chargerModuleNotifications()?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
@@ -60,12 +63,17 @@ export default function RootLayout() {
   }, [migrationsReady]);
 
   useEffect(() => {
+    const Notifications = chargerModuleNotifications();
+    if (!Notifications) {
+      return;
+    }
+
     // Un seul type de notification existe actuellement (le rappel #14) :
     // simple comparaison d'identifiant plutôt qu'une table
     // identifiant → route. Si un 2e type de notification apparaît un jour,
     // remplacer par une table de correspondance à cet endroit précis — le
     // seul point d'entrée du tap sur une notification, cold start compris.
-    const ouvrirAccueilSiRappelRevenus = (reponse: Notifications.NotificationResponse) => {
+    const ouvrirAccueilSiRappelRevenus = (reponse: NotificationResponse) => {
       // Toujours vers l'accueil (liste des comptes), quel que soit le
       // nombre de comptes de l'utilisateur — décision ticket #14 : pas de
       // compte « pertinent » à deviner côté notification, chaque compte

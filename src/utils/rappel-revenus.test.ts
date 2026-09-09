@@ -1,20 +1,25 @@
 import { Platform } from 'react-native';
 
-import * as Notifications from 'expo-notifications';
-
+import { chargerModuleNotifications } from '@/utils/notifications-module';
 import { IDENTIFIANT_RAPPEL_REVENUS, programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
-jest.mock('expo-notifications', () => ({
-  getPermissionsAsync: jest.fn(),
-  setNotificationChannelAsync: jest.fn(),
-  scheduleNotificationAsync: jest.fn(),
-  SchedulableTriggerInputTypes: { MONTHLY: 'monthly' },
-  AndroidImportance: { DEFAULT: 3 },
+jest.mock('@/utils/notifications-module', () => ({
+  chargerModuleNotifications: jest.fn(),
 }));
 
-const getPermissionsAsyncMock = jest.mocked(Notifications.getPermissionsAsync);
-const setNotificationChannelAsyncMock = jest.mocked(Notifications.setNotificationChannelAsync);
-const scheduleNotificationAsyncMock = jest.mocked(Notifications.scheduleNotificationAsync);
+const chargerModuleNotificationsMock = jest.mocked(chargerModuleNotifications);
+
+const getPermissionsAsyncMock = jest.fn();
+const setNotificationChannelAsyncMock = jest.fn();
+const scheduleNotificationAsyncMock = jest.fn();
+
+const moduleNotificationsMock = {
+  getPermissionsAsync: getPermissionsAsyncMock,
+  setNotificationChannelAsync: setNotificationChannelAsyncMock,
+  scheduleNotificationAsync: scheduleNotificationAsyncMock,
+  SchedulableTriggerInputTypes: { MONTHLY: 'monthly' },
+  AndroidImportance: { DEFAULT: 3 },
+} as never;
 
 describe('programmerRappelRevenusMensuel', () => {
   const plateformeOrigine = Platform.OS;
@@ -24,8 +29,17 @@ describe('programmerRappelRevenusMensuel', () => {
     Platform.OS = plateformeOrigine;
   });
 
+  it('ne fait rien dans Expo Go (module indisponible)', async () => {
+    chargerModuleNotificationsMock.mockReturnValue(null);
+
+    await programmerRappelRevenusMensuel();
+
+    expect(getPermissionsAsyncMock).not.toHaveBeenCalled();
+  });
+
   it('ne programme rien si la permission n’est pas accordée', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'denied' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'denied' });
 
     await programmerRappelRevenusMensuel();
 
@@ -34,7 +48,8 @@ describe('programmerRappelRevenusMensuel', () => {
 
   it('programme le rappel du 1er du mois avec un identifiant fixe quand la permission est accordée', async () => {
     Platform.OS = 'ios';
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' });
 
     await programmerRappelRevenusMensuel();
 
@@ -48,7 +63,8 @@ describe('programmerRappelRevenusMensuel', () => {
 
   it('crée le canal de notification Android avant de programmer, uniquement sur Android', async () => {
     Platform.OS = 'android';
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' });
 
     await programmerRappelRevenusMensuel();
 
@@ -57,7 +73,8 @@ describe('programmerRappelRevenusMensuel', () => {
 
   it('ne crée pas de canal Android sur iOS', async () => {
     Platform.OS = 'ios';
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' });
 
     await programmerRappelRevenusMensuel();
 
@@ -66,6 +83,7 @@ describe('programmerRappelRevenusMensuel', () => {
 
   it('n’échoue pas et signale en console une erreur inattendue plutôt que de la propager', async () => {
     const avertissement = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
     getPermissionsAsyncMock.mockRejectedValue(new Error('module natif indisponible'));
 
     await expect(programmerRappelRevenusMensuel()).resolves.toBeUndefined();

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-import * as Notifications from 'expo-notifications';
+import { chargerModuleNotifications } from '@/utils/notifications-module';
 
 /**
  * Identifiant fixe et stable de la notification de rappel (ticket #14) :
@@ -17,8 +17,9 @@ const CANAL_ANDROID = 'rappels';
 
 /**
  * Programme (ou reprogramme) la notification locale récurrente du 1er du
- * mois invitant à saisir les revenus du mois (ticket #14) — no-op si la
- * permission de notifications n'a pas été accordée (voir
+ * mois invitant à saisir les revenus du mois (ticket #14) — no-op dans
+ * Expo Go (voir notifications-module.ts) et si la permission de
+ * notifications n'a pas été accordée (voir
  * src/utils/notifications-permission.ts) : pas la peine de programmer une
  * notification qui ne s'affichera jamais, et rien à défaire explicitement
  * si la permission est révoquée ensuite depuis les réglages système, l'OS
@@ -30,6 +31,11 @@ const CANAL_ANDROID = 'rappels';
  */
 export async function programmerRappelRevenusMensuel(): Promise<void> {
   try {
+    const Notifications = chargerModuleNotifications();
+    if (!Notifications) {
+      return;
+    }
+
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
       return;

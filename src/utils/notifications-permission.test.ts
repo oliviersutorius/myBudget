@@ -1,29 +1,43 @@
-import * as Notifications from 'expo-notifications';
-
+import { chargerModuleNotifications } from '@/utils/notifications-module';
 import { demanderPermissionNotificationsSiNecessaire } from '@/utils/notifications-permission';
 import { programmerRappelRevenusMensuel } from '@/utils/rappel-revenus';
 
-jest.mock('expo-notifications', () => ({
-  getPermissionsAsync: jest.fn(),
-  requestPermissionsAsync: jest.fn(),
+jest.mock('@/utils/notifications-module', () => ({
+  chargerModuleNotifications: jest.fn(),
 }));
 
 jest.mock('@/utils/rappel-revenus', () => ({
   programmerRappelRevenusMensuel: jest.fn(),
 }));
 
-const getPermissionsAsyncMock = jest.mocked(Notifications.getPermissionsAsync);
-const requestPermissionsAsyncMock = jest.mocked(Notifications.requestPermissionsAsync);
+const chargerModuleNotificationsMock = jest.mocked(chargerModuleNotifications);
 const programmerRappelRevenusMensuelMock = jest.mocked(programmerRappelRevenusMensuel);
+
+const getPermissionsAsyncMock = jest.fn();
+const requestPermissionsAsyncMock = jest.fn();
+
+const moduleNotificationsMock = {
+  getPermissionsAsync: getPermissionsAsyncMock,
+  requestPermissionsAsync: requestPermissionsAsyncMock,
+} as never;
 
 describe('demanderPermissionNotificationsSiNecessaire', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
+  it('ne fait rien dans Expo Go (module indisponible)', async () => {
+    chargerModuleNotificationsMock.mockReturnValue(null);
+
+    await demanderPermissionNotificationsSiNecessaire();
+
+    expect(getPermissionsAsyncMock).not.toHaveBeenCalled();
+  });
+
   it('demande la permission quand elle n’a jamais été tranchée', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' } as never);
-    requestPermissionsAsyncMock.mockResolvedValue({ status: 'denied' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' });
+    requestPermissionsAsyncMock.mockResolvedValue({ status: 'denied' });
 
     await demanderPermissionNotificationsSiNecessaire();
 
@@ -31,8 +45,9 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
   });
 
   it('programme le rappel dès que la permission vient tout juste d’être accordée', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' } as never);
-    requestPermissionsAsyncMock.mockResolvedValue({ status: 'granted' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' });
+    requestPermissionsAsyncMock.mockResolvedValue({ status: 'granted' });
 
     await demanderPermissionNotificationsSiNecessaire();
 
@@ -40,8 +55,9 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
   });
 
   it('ne programme pas le rappel si l’utilisateur vient de refuser la permission', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' } as never);
-    requestPermissionsAsyncMock.mockResolvedValue({ status: 'denied' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'undetermined' });
+    requestPermissionsAsyncMock.mockResolvedValue({ status: 'denied' });
 
     await demanderPermissionNotificationsSiNecessaire();
 
@@ -49,7 +65,8 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
   });
 
   it('ne redemande pas une permission déjà accordée, ni ne reprogramme le rappel (déjà fait par _layout.tsx)', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'granted' });
 
     await demanderPermissionNotificationsSiNecessaire();
 
@@ -58,7 +75,8 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
   });
 
   it('ne redemande pas une permission déjà refusée', async () => {
-    getPermissionsAsyncMock.mockResolvedValue({ status: 'denied' } as never);
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
+    getPermissionsAsyncMock.mockResolvedValue({ status: 'denied' });
 
     await demanderPermissionNotificationsSiNecessaire();
 
@@ -68,6 +86,7 @@ describe('demanderPermissionNotificationsSiNecessaire', () => {
 
   it('n’échoue pas et signale en console une erreur inattendue plutôt que de la propager', async () => {
     const avertissement = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    chargerModuleNotificationsMock.mockReturnValue(moduleNotificationsMock);
     getPermissionsAsyncMock.mockRejectedValue(new Error('module natif indisponible'));
 
     await expect(demanderPermissionNotificationsSiNecessaire()).resolves.toBeUndefined();
