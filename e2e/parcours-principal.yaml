@@ -1,0 +1,85 @@
+# Parcours principal (ticket #22) : créer un compte → définir un type de
+# dépense (niveau 2 « Fixe » + niveau 3 avec un montant) → ajouter un revenu
+# sur le mois courant → consulter le récapitulatif mensuel (onglet Budget) et
+# vérifier que le montant disponible affiché reflète bien revenu - dépense.
+#
+# `permissions.notifications: allow` : la création du tout premier compte
+# déclenche la demande de permission de notifications (ticket #19), qui
+# ouvrirait sinon un dialogue système Android bloquant le flow — pré-accordée
+# via ADB pour ne jamais l'affronter ici (voir src/utils/notifications-permission.ts).
+# `clearState: true` : garantit un compte vide en local (dev) comme en CI
+# (émulateur déjà neuf, mais idempotent en cas de relance).
+#
+# Lancer avec: maestro test e2e/parcours-principal.yaml
+appId: com.mybudget.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: allow
+# `extendedWaitUntil` plutôt qu'un simple `assertVisible` sur la première
+# assertion seulement : `clearState: true` force un process/premier rendu
+# aussi froid qu'un tout premier lancement (voir e2e/onboarding.yaml, même
+# constat en CI sur ticket #22) — une fois l'app effectivement affichée,
+# les assertions suivantes n'ont plus cette marge à prendre.
+- extendedWaitUntil:
+    visible: 'Mes comptes'
+    timeout: 30000
+- assertVisible: "Aucun compte pour l'instant"
+
+# --- Création du compte ---
+- tapOn: 'Ajouter un compte'
+- tapOn: 'Nom du compte'
+- inputText: 'Compte Test'
+- tapOn: 'Banque du compte'
+- inputText: 'Banque Test'
+- hideKeyboard
+- tapOn: 'Valider la création du compte'
+- assertVisible: 'Compte Test'
+
+# --- Ouverture du compte (menu « ⋮ » → Modifier, pas de tap direct sur la
+# ligne) : identifiant de compte inconnu à l'avance, d'où le motif regex. ---
+- tapOn: '.*Actions pour le compte Compte Test.*'
+- tapOn: 'Modifier'
+- assertVisible: 'Compte Test'
+
+# --- Onglet Dépenses : type niveau 2 « Loyer » (Fixe) ---
+- tapOn: 'Onglet Dépenses'
+- tapOn: 'Ajouter un type de dépense — Fixe'
+- tapOn: 'Nom du nouveau type de dépense'
+- inputText: 'Loyer'
+- hideKeyboard
+- tapOn: 'Ajouter'
+- assertVisible: 'Loyer'
+
+# --- Ligne niveau 3 sous « Loyer », avec un montant ---
+- tapOn: 'Ajouter une ligne — Loyer'
+- tapOn: 'Nom de la nouvelle ligne'
+- inputText: 'Loyer appartement'
+- tapOn: 'Montant de la nouvelle ligne'
+- inputText: '1200'
+- hideKeyboard
+- tapOn: 'Ajouter'
+# La ligne niveau 3 se déplie automatiquement dès son ajout (voir
+# handleAjouterNiveau3, comptes/[id]/edit.tsx) : pas de tap supplémentaire
+# nécessaire pour la révéler.
+- assertVisible: 'Loyer appartement'
+
+# --- Onglet Revenus : revenu sur le mois courant (sélecteur de mois déjà
+# positionné dessus par défaut, aucune navigation de mois nécessaire) ---
+- tapOn: 'Onglet Revenus'
+- tapOn: 'Ajouter un revenu'
+- tapOn: 'Libellé du revenu'
+- inputText: 'Salaire'
+- tapOn: 'Montant du revenu'
+- inputText: '2000'
+- hideKeyboard
+- tapOn: 'Valider l’ajout du revenu'
+- assertVisible: 'Salaire'
+
+# --- Onglet Budget : montant disponible du mois courant = 2000 - 1200 =
+# 800,00 € (regex plutôt qu'un texte littéral : le séparateur inséré par
+# Intl.NumberFormat avant « € » est une espace insécable U+00A0, pas une
+# espace classique — voir src/utils/montant.ts) ---
+- tapOn: 'Onglet Budget'
+- assertVisible: '.*800,00.*'

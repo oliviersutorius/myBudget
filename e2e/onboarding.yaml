@@ -4,4 +4,14 @@
 appId: com.mybudget.app
 ---
 - launchApp
-- assertVisible: 'Mes comptes'
+# `extendedWaitUntil` plutôt qu'un simple `assertVisible` (timeout par
+# défaut insuffisant constaté en CI, ticket #22 : 2 runs consécutifs en
+# échec sur ce seul smoke test, sans crash ni exception au logcat — un 3e
+# run, avec un peu plus de marge avant l'assertion, est passé en 10s). Ce
+# flow est le premier exécuté (ordre alphabétique des fichiers e2e/), donc
+# le plus exposé au cold start (warm-up JIT Hermes, première ouverture
+# SQLite sur l'émulateur/l'app fraîchement installés) — les flows suivants,
+# sur un process déjà chaud, n'ont pas ce besoin.
+- extendedWaitUntil:
+    visible: 'Mes comptes'
+    timeout: 30000

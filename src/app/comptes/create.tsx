@@ -80,7 +80,7 @@ export default function CreationCompteScreen() {
             onChangeText={setBanque}
             placeholder="Ex. BNP Paribas"
             placeholderTextColor={theme.textSecondary}
-            accessibilityLabel="Banque"
+            accessibilityLabel="Banque du compte"
             style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
           />
           {errors.banque ? (

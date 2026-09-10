@@ -116,9 +116,36 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # Chaque ligne de `script:` tourne dans un `sh -c` séparé (voir le
+          # commentaire du step « Installer Maestro » ci-dessus) : la ligne
+          # `maestro test` et les captures qui doivent suivre même en cas
+          # d'échec sont donc regroupées sur une seule ligne (`;`, pas
+          # `&&`) — sur des lignes séparées, un `maestro test` en échec
+          # ferait sortir le script avant elles, on perdrait ces diagnostics
+          # justement au moment où ils sont les plus utiles (ticket #22 : 2
+          # runs en échec sur le seul smoke test onboarding.yaml, sans rien
+          # d'exploitable dans les logs du job pour en identifier la cause —
+          # `--debug-output` de Maestro testé en remplacement, sans effet
+          # constaté sur la version installée ici). `adb exec-out screencap`
+          # capture l'état de l'écran à l'arrêt du run (dernier flow en
+          # échec le cas échéant) ; `adb logcat -d`, les logs Android/app
+          # depuis le début du run (voir `adb logcat -c` ci-dessus) — les
+          # deux uploadés ci-dessous en cas d'échec (voir step suivant).
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test e2e/
+            adb logcat -c
+            maestro test e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb exec-out screencap -p > failure-screenshot.png; adb logcat -d > android-logcat.txt
+      - name: Vérifier le résultat des flows Maestro
+        run: exit "${MAESTRO_EXIT:-1}"
+      - name: Uploader les diagnostics Maestro/Android en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-e2e-diagnostics
+          path: |
+            failure-screenshot.png
+            android-logcat.txt
+          if-no-files-found: warn
 
 # Note : la Review N1 (/review) est déclenchée à la demande par le développeur,
 # pas automatiquement en CI (choix du projet — voir docs/AGENTS.md).

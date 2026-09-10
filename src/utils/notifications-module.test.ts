@@ -57,11 +57,9 @@ describe('chargerModuleNotifications', () => {
     });
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- require() nécessaire pour re-résoudre le module avec les doMock ci-dessus
-    const {
-      chargerModuleNotifications: chargerApresReset,
-    } = require('@/utils/notifications-module');
+    const moduleFrais = require('@/utils/notifications-module');
 
-    expect(chargerApresReset()).toBeNull();
+    expect(moduleFrais.chargerModuleNotifications()).toBeNull();
     expect(avertissement).toHaveBeenCalledTimes(1);
 
     avertissement.mockRestore();
