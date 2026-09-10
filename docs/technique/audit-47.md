@@ -124,12 +124,12 @@ Ticket #47 rejoué en entier sur le code actuel : douze features livrées depuis
 
 Benchmark rejoué (`better-sqlite3`, même méthodologie que l'audit initial — hors repo, jetable), schéma actuel (2 migrations, `montants_depense_variable` incluse), en couvrant en plus les requêtes annualisées ajoutées par #13 (`getMontantsVariableCompteAnneeQuery`, `getRevenusAnneeQuery`, utilisées par le récapitulatif mensuel `BudgetTab`) :
 
-| Requête                                | Réaliste (7,2k hist. + 28,8k var.) | Pessimiste (72k hist. + 72k var.) |
-| --------------------------------------- | ----------------------------------- | ---------------------------------- |
-| `getMontantsHistoriqueCompteQuery`      | 0,80 ms                             | 8,81 ms                            |
-| `getMontantsVariableCompteAnneeQuery`   | 0,70 ms                             | 1,25 ms                            |
-| `getRevenusAnneeQuery`                  | 0,02 ms                             | 0,02 ms                            |
-| `getComptesQuery`                       | 0,02 ms                             | 0,01 ms                            |
+| Requête                               | Réaliste (7,2k hist. + 28,8k var.) | Pessimiste (72k hist. + 72k var.) |
+| ------------------------------------- | ---------------------------------- | --------------------------------- |
+| `getMontantsHistoriqueCompteQuery`    | 0,80 ms                            | 8,81 ms                           |
+| `getMontantsVariableCompteAnneeQuery` | 0,70 ms                            | 1,25 ms                           |
+| `getRevenusAnneeQuery`                | 0,02 ms                            | 0,02 ms                           |
+| `getComptesQuery`                     | 0,02 ms                            | 0,01 ms                           |
 
 `EXPLAIN QUERY PLAN` : toujours uniquement des `SEARCH ... USING INDEX`, aucun `SCAN` de table, sur les trois requêtes ci-dessus. Seul écart relevé : `getRevenusAnneeQuery` déclenche un `USE TEMP B-TREE FOR ORDER BY` (le tri `ORDER BY id ASC` n'est pas couvert par l'index `revenus_compte_id_mois_idx`) — sans impact mesurable au volume réel d'un compte (quelques dizaines de revenus par an maximum), pas d'index dédié ajouté pour ce seul gain.
 
@@ -146,11 +146,11 @@ Benchmark rejoué (`better-sqlite3`, même méthodologie que l'audit initial —
 - **Faux positif à ne pas suivre** : `@expo/ngrok` remonte comme devDependency inutilisée — c'est inexact, cette dépendance n'est jamais `import`ée directement dans `src/` mais chargée dynamiquement par `expo-cli` pour `expo start --tunnel` (voir #47 commentaires + PR #56, `patches/@expo+ngrok+4.1.3.patch`) ; la retirer casserait à nouveau le tunnel. `depcheck` ne peut pas voir ce type d'usage indirect — limite connue de l'outil, déjà en l'état lors du premier audit pour d'autres paquets.
 - `eslint` remonte en "missing dependency" (`eslint.config.js` l'importe, absent de `package.json`) — résolu aujourd'hui via une dépendance transitive d'`eslint-config-expo`, `npm run lint` fonctionne sans souci. Point d'hygiène mineur (ajouter `eslint` en devDependency explicite serait plus robuste face à un futur changement de version transitive), pas une urgence — non appliqué dans ce ticket, à considérer lors d'une prochaine maintenance de dépendances.
 
-**Nouveau finding — asset orphelin** : `assets/images/logo-glow.png` (324 Ko), présent depuis le scaffold initial (`c90c6e2`), **jamais référencé** dans `src/`, `app.json` ni aucune config — confirmé par recherche manuelle (les suffixes `@2x`/`@3x` de `tabIcons/home.png`, eux, sont résolus implicitement par React Native selon la densité d'écran : faux positif à ne pas confondre avec un vrai orphelin). Candidat à suppression, **soumis au développeur avant retrait** (voir Suivi ci-dessous).
+**Nouveau finding — asset orphelin** : `assets/images/logo-glow.png` (324 Ko), présent depuis le scaffold initial (`c90c6e2`), **jamais référencé** dans `src/`, `app.json` ni aucune config — confirmé par recherche manuelle (les suffixes `@2x`/`@3x` de `tabIcons/home.png`, eux, sont résolus implicitement par React Native selon la densité d'écran : faux positif à ne pas confondre avec un vrai orphelin). Soumis au développeur, **validé et retiré** dans ce même ticket.
 
 **Conclusion** : pas de nouveau code mort côté exports/dépendances (le nettoyage initial tient), un seul nouveau candidat — un asset image orphelin.
 
 ### Suivi (mise à jour)
 
 - #50 (vulnérabilités modérées transitives) : toujours d'actualité, aucune régression, aucun nouveau correctif disponible.
-- Suppression de `assets/images/logo-glow.png` : soumise au développeur, en attente de validation avant retrait effectif.
+- `assets/images/logo-glow.png` : validé et supprimé par le développeur dans ce même ticket.
