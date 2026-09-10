@@ -17,7 +17,14 @@ appId: com.mybudget.app
     clearState: true
     permissions:
       notifications: allow
-- assertVisible: 'Mes comptes'
+# `extendedWaitUntil` plutôt qu'un simple `assertVisible` sur la première
+# assertion seulement : `clearState: true` force un process/premier rendu
+# aussi froid qu'un tout premier lancement (voir e2e/onboarding.yaml, même
+# constat en CI sur ticket #22) — une fois l'app effectivement affichée,
+# les assertions suivantes n'ont plus cette marge à prendre.
+- extendedWaitUntil:
+    visible: 'Mes comptes'
+    timeout: 30000
 - assertVisible: "Aucun compte pour l'instant"
 
 # --- Création du compte ---
