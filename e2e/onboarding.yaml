@@ -4,4 +4,14 @@
 appId: com.mybudget.app
 ---
 - launchApp
+# Instrumentation temporaire (diagnostic #22, CI échoue sans indice
+# exploitable dans les logs) : capture l'écran juste après le lancement,
+# puis l'état exact au moment où l'assertion suivante échouerait
+# (assertVisible optionnel, n'interrompt pas le flow) — à retirer une fois
+# la cause identifiée.
+- takeScreenshot: 01-juste-apres-launchApp
+- assertVisible:
+    text: 'Mes comptes'
+    optional: true
+- takeScreenshot: 02-avant-assertion-finale
 - assertVisible: 'Mes comptes'

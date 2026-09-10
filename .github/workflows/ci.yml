@@ -123,14 +123,17 @@ jobs:
           # `&&`) — sur des lignes séparées, un `maestro test` en échec
           # ferait sortir le script avant `adb logcat -d`, on perdrait le
           # logcat justement au moment où il est le plus utile pour
-          # diagnostiquer. `--debug-output` : capture screenshots + dump de
-          # hiérarchie de vue par commande de chaque flow, uploadés ci-dessous
-          # en cas d'échec (voir step suivant) — invisible autrement, aucun
-          # de ces artefacts n'apparaît dans les logs du job.
+          # diagnostiquer. `--debug-output` retiré : sans effet constaté (0
+          # fichier produit) sur la version de Maestro installée ici — les
+          # `takeScreenshot` ajoutés directement dans e2e/onboarding.yaml
+          # (diagnostic temporaire #22) écrivent, eux, systématiquement leur
+          # PNG dans le répertoire courant, uploadés ci-dessous en cas
+          # d'échec (voir step suivant) — invisible autrement, aucun de ces
+          # artefacts n'apparaît dans les logs du job.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
             adb logcat -c
-            maestro test --debug-output maestro-debug e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb logcat -d > android-logcat.txt
+            maestro test e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb logcat -d > android-logcat.txt
       - name: Vérifier le résultat des flows Maestro
         run: exit "${MAESTRO_EXIT:-1}"
       - name: Uploader les diagnostics Maestro/Android en cas d'échec
@@ -139,7 +142,7 @@ jobs:
         with:
           name: maestro-e2e-diagnostics
           path: |
-            maestro-debug/
+            *.png
             android-logcat.txt
           if-no-files-found: warn
 
