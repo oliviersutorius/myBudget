@@ -116,9 +116,32 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # Chaque ligne de `script:` tourne dans un `sh -c` séparé (voir le
+          # commentaire du step « Installer Maestro » ci-dessus) : la ligne
+          # `maestro test` et la capture du logcat qui doit suivre même en
+          # cas d'échec sont donc regroupées sur une seule ligne (`;`, pas
+          # `&&`) — sur des lignes séparées, un `maestro test` en échec
+          # ferait sortir le script avant `adb logcat -d`, on perdrait le
+          # logcat justement au moment où il est le plus utile pour
+          # diagnostiquer. `--debug-output` : capture screenshots + dump de
+          # hiérarchie de vue par commande de chaque flow, uploadés ci-dessous
+          # en cas d'échec (voir step suivant) — invisible autrement, aucun
+          # de ces artefacts n'apparaît dans les logs du job.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test e2e/
+            adb logcat -c
+            maestro test --debug-output maestro-debug e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb logcat -d > android-logcat.txt
+      - name: Vérifier le résultat des flows Maestro
+        run: exit "${MAESTRO_EXIT:-1}"
+      - name: Uploader les diagnostics Maestro/Android en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-e2e-diagnostics
+          path: |
+            maestro-debug/
+            android-logcat.txt
+          if-no-files-found: warn
 
 # Note : la Review N1 (/review) est déclenchée à la demande par le développeur,
 # pas automatiquement en CI (choix du projet — voir docs/AGENTS.md).
