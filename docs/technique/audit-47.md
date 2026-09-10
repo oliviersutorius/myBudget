@@ -1,6 +1,6 @@
 # Audit technique #47 — sécurité, performance BDD, dette de code
 
-> Doc technique. Ticket source : [#47](https://github.com/oliviersutorius/myBudget/issues/47). Trois volets indépendants, exécutés le 2026-09-04 sur `main` (`7ca073c`).
+> Doc technique. Ticket source : [#47](https://github.com/oliviersutorius/myBudget/issues/47). Trois volets indépendants, exécutés le 2026-09-04 sur `main` (`7ca073c`) — rejoués le 2026-09-10 sur `main` (`db0629e`), voir « Mise à jour » en fin de document.
 
 ## 1. Audit de sécurité
 
@@ -105,3 +105,52 @@ Deux éléments ne sont pas du code mort au sens de "jamais atteint", mais posen
 - Ticket dédié ouvert pour le suivi des 4 vulnérabilités modérées transitives (§1.1) : #50.
 - Liste de code mort/dépendances ci-dessus soumise au développeur, qui a validé le retrait de l'export mort (§3.1), des 5 dépendances (§3.2), de l'écran "Explore" et de `use-settings-store.ts`/`use-compte-actif-store.ts` (§3.3).
 - **Correctif post-review N1** : la suppression de l'écran "Explore" a rendu orphelins `src/components/ui/collapsible.tsx` (seul consommateur restant, pas `comptes/[id]/edit.tsx` comme supposé à tort en cascade — cet écran a sa propre implémentation locale, `Niveau2RowCollapsible`, sans lien avec ce composant partagé) et les images `expo-badge.png`/`expo-badge-white.png` (utilisées uniquement par `web-badge.tsx`, déjà supprimé). Ces deux étaient sains au moment de l'audit initial (`ts-prune` ne les avait pas et ne pouvait pas les signaler, `explore.tsx` étant encore leur appelant) — devenus morts en conséquence directe de ce nettoyage même, repérés par la review N1 (`/review`) et retirés dans le même PR.
+
+## Mise à jour — 2026-09-10 (`db0629e`)
+
+Ticket #47 rejoué en entier sur le code actuel : douze features livrées depuis le passage initial (#9, #13, #14, #16, #19, #20, #22, #26, #41, #45, #52), dont deux ajoutant des requêtes BDD non couvertes par le premier audit (#13 montant disponible, #52 dépenses variables) et une dépendance ajoutée entre-temps (`@expo/ngrok`, voir #47 commentaires + #56).
+
+### 1. Sécurité
+
+- `npm audit` : **19 vulnérabilités modérées** (0 high/critical) — mêmes 3 causes racines transitives qu'au ticket #50 (`decode-uri-component`/`query-string`/`expo-router`, `esbuild`/`drizzle-kit`, `uuid`/`xcode`/`@expo/config-plugins` — cette dernière chaîne inclut maintenant aussi `expo-splash-screen` **et** `@expo/ngrok`, d'où un nombre d'entrées plus élevé qu'en #50 sans nouvelle cause racine). `npm audit fix` (dry-run) confirmé sans effet — aucun correctif non-breaking disponible, conclusion #50 inchangée.
+- Aucun secret en clair, aucun fichier protégé (`*.env`, `android/keystore/**`, `ios/certs/**`) touché.
+- Permissions Android/iOS : notifications uniquement (#14/#19), toujours conforme au moindre privilège — rien d'ajouté depuis.
+- Injection SQL : toujours 0 risque, 100% Drizzle query builder (vérifié aussi sur les requêtes ajoutées par #13/#52).
+- `expo-doctor` : 6 paquets en léger décalage de version SDK (`npx expo install --check` recommandé en maintenance courante, hors scope de ce ticket).
+
+**Conclusion** : rien de nouveau à corriger, suivi #50 toujours d'actualité.
+
+### 2. Performance BDD
+
+Benchmark rejoué (`better-sqlite3`, même méthodologie que l'audit initial — hors repo, jetable), schéma actuel (2 migrations, `montants_depense_variable` incluse), en couvrant en plus les requêtes annualisées ajoutées par #13 (`getMontantsVariableCompteAnneeQuery`, `getRevenusAnneeQuery`, utilisées par le récapitulatif mensuel `BudgetTab`) :
+
+| Requête                                | Réaliste (7,2k hist. + 28,8k var.) | Pessimiste (72k hist. + 72k var.) |
+| --------------------------------------- | ----------------------------------- | ---------------------------------- |
+| `getMontantsHistoriqueCompteQuery`      | 0,80 ms                             | 8,81 ms                            |
+| `getMontantsVariableCompteAnneeQuery`   | 0,70 ms                             | 1,25 ms                            |
+| `getRevenusAnneeQuery`                  | 0,02 ms                             | 0,02 ms                            |
+| `getComptesQuery`                       | 0,02 ms                             | 0,01 ms                            |
+
+`EXPLAIN QUERY PLAN` : toujours uniquement des `SEARCH ... USING INDEX`, aucun `SCAN` de table, sur les trois requêtes ci-dessus. Seul écart relevé : `getRevenusAnneeQuery` déclenche un `USE TEMP B-TREE FOR ORDER BY` (le tri `ORDER BY id ASC` n'est pas couvert par l'index `revenus_compte_id_mois_idx`) — sans impact mesurable au volume réel d'un compte (quelques dizaines de revenus par an maximum), pas d'index dédié ajouté pour ce seul gain.
+
+**Nouveau point relevé (mineur, non bloquant)** : `Niveau3Liste` (`comptes/[id]/edit.tsx`) exécute sa propre `getTypesDepenseNiveau3Query(niveau2Id)` par pavé niveau 2 affiché, plutôt qu'un batch groupé par compte (contrairement au pattern déjà appliqué pour les montants historiques/variables, `getMontantsHistoriqueCompteQuery`). N+1 au sens strict, mais borné par le nombre de pavés niveau 2 réellement affichés (quelques unités par compte dans tous les cas d'usage réalistes) — chaque requête reste indexée et sous la milliseconde. Pas de correctif proposé dans ce ticket (pas de régression, gain non mesurable à l'échelle réelle) ; à revisiter seulement si un compte venait à afficher un nombre de pavés nettement plus élevé que ce que prévoit le modèle métier actuel.
+
+**Conclusion** : toujours aucune requête problématique, aucun index manquant, aucune régression de performance introduite par les features livrées depuis le premier audit. Le nouveau point ci-dessus est documenté, pas corrigé (rapport coût/bénéfice défavorable à ce stade).
+
+### 3. Code mort et dépendances inutilisées
+
+`ts-prune` : aucun nouvel export mort — toutes les entrées relevées sont des faux positifs déjà catégorisés par la méthodologie de l'audit initial (fichiers `.web.tsx` résolus par plateforme, pages Expo Router avec `default` obligatoire, types utilisés uniquement dans leur propre fichier). Le nettoyage du premier passage (export mort, 5 dépendances, écran "Explore", 2 stores) reste intégralement en place — rien réapparu.
+
+`depcheck` :
+
+- **Faux positif à ne pas suivre** : `@expo/ngrok` remonte comme devDependency inutilisée — c'est inexact, cette dépendance n'est jamais `import`ée directement dans `src/` mais chargée dynamiquement par `expo-cli` pour `expo start --tunnel` (voir #47 commentaires + PR #56, `patches/@expo+ngrok+4.1.3.patch`) ; la retirer casserait à nouveau le tunnel. `depcheck` ne peut pas voir ce type d'usage indirect — limite connue de l'outil, déjà en l'état lors du premier audit pour d'autres paquets.
+- `eslint` remonte en "missing dependency" (`eslint.config.js` l'importe, absent de `package.json`) — résolu aujourd'hui via une dépendance transitive d'`eslint-config-expo`, `npm run lint` fonctionne sans souci. Point d'hygiène mineur (ajouter `eslint` en devDependency explicite serait plus robuste face à un futur changement de version transitive), pas une urgence — non appliqué dans ce ticket, à considérer lors d'une prochaine maintenance de dépendances.
+
+**Nouveau finding — asset orphelin** : `assets/images/logo-glow.png` (324 Ko), présent depuis le scaffold initial (`c90c6e2`), **jamais référencé** dans `src/`, `app.json` ni aucune config — confirmé par recherche manuelle (les suffixes `@2x`/`@3x` de `tabIcons/home.png`, eux, sont résolus implicitement par React Native selon la densité d'écran : faux positif à ne pas confondre avec un vrai orphelin). Candidat à suppression, **soumis au développeur avant retrait** (voir Suivi ci-dessous).
+
+**Conclusion** : pas de nouveau code mort côté exports/dépendances (le nettoyage initial tient), un seul nouveau candidat — un asset image orphelin.
+
+### Suivi (mise à jour)
+
+- #50 (vulnérabilités modérées transitives) : toujours d'actualité, aucune régression, aucun nouveau correctif disponible.
+- Suppression de `assets/images/logo-glow.png` : soumise au développeur, en attente de validation avant retrait effectif.
