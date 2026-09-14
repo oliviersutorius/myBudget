@@ -732,7 +732,15 @@ function Niveau1Pave({
 
   return (
     <ThemedView type="backgroundElement" style={styles.pave}>
-      <ThemedView style={styles.paveHeader}>
+      {/* `type="backgroundElement"` explicite sur chaque `ThemedView` de cet
+          en-tête et de la liste ci-dessous (ticket #64) : sans lui,
+          `ThemedView` retombe sur son fond par défaut (`background`, voir
+          src/components/themed-view.tsx) — visuellement distinct du fond de
+          ce pavé, même défaut que celui corrigé sur le récapitulatif du
+          ticket #63 (voir son commentaire dans RecapNiveau1Card). Repéré ici
+          par le développeur sur device, sur `niveau2Card` (ci-dessous) —
+          étendu à l'en-tête du pavé par cohérence. */}
+      <ThemedView type="backgroundElement" style={styles.paveHeader}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le pavé ${titre}`}
@@ -743,7 +751,7 @@ function Niveau1Pave({
           <ThemedText type="smallBold">{titre}</ThemedText>
         </Pressable>
 
-        <ThemedView style={styles.paveHeaderRight}>
+        <ThemedView type="backgroundElement" style={styles.paveHeaderRight}>
           <ThemedText type="smallBold" style={styles.tabularNums}>
             {formatCentimesEnEuros(total)}
           </ThemedText>
@@ -765,7 +773,7 @@ function Niveau1Pave({
             Aucun type « {titre} » pour l’instant.
           </ThemedText>
         ) : (
-          <ThemedView style={styles.typesList}>
+          <ThemedView type="backgroundElement" style={styles.typesList}>
             {types.map((type) => (
               <Niveau2Ligne
                 key={type.id}
@@ -964,8 +972,20 @@ function Niveau2Ligne({
 
   return (
     <>
-      <ThemedView style={styles.niveau2Card}>
-        <ThemedView style={styles.niveau2Header}>
+      {/* `type="backgroundElement"` explicite (ici et sur `niveau2Header`/
+          `niveau2HeaderRight` ci-dessous) : sans lui, `ThemedView` retombe
+          sur `background` (voir src/components/themed-view.tsx) — remonté
+          par le développeur sur device (ticket #64), visible comme un
+          rectangle plus clair « en trop » derrière chaque type niveau 2,
+          nettement plus marqué que sur le récapitulatif du ticket #63 (même
+          défaut, corrigé là-bas) car cette carte couvre une zone bien plus
+          grande. Contrairement au choix d'origine du ticket #41 (« carte
+          imbriquée fond `background` », effet « encastré » volontaire) : le
+          développeur préfère désormais l'harmoniser avec le pavé
+          `backgroundElement` englobant, comme sur l'onglet Budget — choix
+          délibéré qui remplace celui de #41 pour ce point précis. */}
+      <ThemedView type="backgroundElement" style={styles.niveau2Card}>
+        <ThemedView type="backgroundElement" style={styles.niveau2Header}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${libelleAccessible}`}
@@ -979,7 +999,7 @@ function Niveau2Ligne({
             <ThemedText type="smallBold">{item.libelle}</ThemedText>
           </Pressable>
 
-          <ThemedView style={styles.niveau2HeaderRight}>
+          <ThemedView type="backgroundElement" style={styles.niveau2HeaderRight}>
             <ThemedText type="small" style={styles.tabularNums}>
               {formatCentimesEnEuros(sommeParNiveau2.get(item.id) ?? 0)}
             </ThemedText>
@@ -1126,7 +1146,10 @@ function Niveau3Liste({
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(niveau2Id), [niveau2Id]);
 
   return (
-    <ThemedView style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}>
+    <ThemedView
+      type="backgroundElement"
+      style={[styles.niveau3Section, masque ? styles.masqueDisplayNone : undefined]}
+    >
       {sousTypes.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
           Aucune ligne pour l’instant.
@@ -1309,13 +1332,19 @@ function TypeDepenseNiveau3Row({
 
   return (
     <>
+      {/* `type="backgroundElement"` explicite (ici et sur `niveau3RowMain`
+          ci-dessous), séparateur en `backgroundSelected` plutôt que
+          `backgroundElement` (qui serait invisible sur son propre fond une
+          fois la ligne elle-même passée en `backgroundElement`) — même
+          correctif que `Niveau2Ligne`/`Niveau1Pave` ci-dessus (ticket #64). */}
       <ThemedView
+        type="backgroundElement"
         style={[
           styles.niveau3Row,
-          premiere ? undefined : { borderTopWidth: 1, borderTopColor: theme.backgroundElement },
+          premiere ? undefined : { borderTopWidth: 1, borderTopColor: theme.backgroundSelected },
         ]}
       >
-        <ThemedView style={styles.niveau3RowMain}>
+        <ThemedView type="backgroundElement" style={styles.niveau3RowMain}>
           <ThemedText type="small" style={styles.niveau3Libelle}>
             {item.libelle}
           </ThemedText>
@@ -1563,9 +1592,11 @@ function RevenuRow({ revenu, onModifier }: { revenu: Revenu; onModifier: () => v
 
   return (
     <ThemedView type="backgroundElement" style={styles.revenuCard}>
-      <ThemedView style={styles.revenuCardRow}>
+      {/* Même correctif que Niveau1Pave/Niveau2Ligne ci-dessus (ticket #64) :
+          `type="backgroundElement"` explicite sur les conteneurs imbriqués. */}
+      <ThemedView type="backgroundElement" style={styles.revenuCardRow}>
         <ThemedText type="small">{revenu.libelle}</ThemedText>
-        <ThemedView style={styles.revenuCardRight}>
+        <ThemedView type="backgroundElement" style={styles.revenuCardRight}>
           <ThemedText type="small">{formatCentimesEnEuros(revenu.montant)}</ThemedText>
           <ActionsMenuButton
             accessibilityLabel={`Actions pour le revenu ${revenu.libelle}`}
@@ -2300,8 +2331,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
   },
+  // `alignSelf: 'stretch'` (ticket #64) : sans lui, `paveHeader` centre ce
+  // `Pressable` sur sa hauteur de contenu (~24px, chevron + texte) à
+  // l'intérieur des 44px du header (`alignItems: 'center'` du parent ne
+  // fait qu'aligner, pas grandir) — la zone tactile utile ne couvrait donc
+  // que le milieu de la ligne, pas ses 44px pleins, malgré `flex: 1` qui ne
+  // corrige que la largeur. Repéré sur device par le développeur (le
+  // chevron/libellé sont déjà dans ce même `Pressable`, voir le composant).
   paveHeaderLabel: {
     flex: 1,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
@@ -2348,8 +2387,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
   },
+  // Même correctif que `paveHeaderLabel` ci-dessus (ticket #64).
   niveau2HeaderLabel: {
     flex: 1,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,

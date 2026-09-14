@@ -130,7 +130,12 @@ function CompteRow({ compte, onModifier }: { compte: Compte; onModifier: () => v
 
   return (
     <ThemedView type="backgroundElement" style={styles.compteRow}>
-      <ThemedView style={styles.compteInfo}>
+      {/* `type="backgroundElement"` explicite : `ThemedView` retombe sinon
+          sur son fond par défaut (`background`, voir themed-view.tsx),
+          visuellement distinct de `compteRow` — même défaut que celui
+          corrigé côté onglets Dépenses/Budget de la page compte (ticket
+          #64), repéré ici en passant au même endroit du code. */}
+      <ThemedView type="backgroundElement" style={styles.compteInfo}>
         <ThemedText type="smallBold">{compte.nom}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {compte.banque}
