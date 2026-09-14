@@ -1939,7 +1939,7 @@ function BudgetTab({
 
         {revenusDuMoisSelectionne.length > 0 ? (
           <ThemedView type="backgroundElement" style={styles.pave}>
-            <ThemedView style={styles.paveHeader}>
+            <ThemedView type="backgroundElement" style={styles.paveHeader}>
               <ThemedText type="smallBold">Revenus</ThemedText>
               <ThemedText type="smallBold" style={styles.tabularNums}>
                 {formatCentimesEnEuros(sommerMontants(revenusDuMoisSelectionne))}
@@ -2062,14 +2062,27 @@ function RecapNiveau1Card({
 
   return (
     <ThemedView type="backgroundElement" style={styles.pave}>
-      <ThemedView style={styles.paveHeader}>
+      {/* `type="backgroundElement"` explicite sur chaque `ThemedView` de cet
+          arbre (ici et dans RecapNiveau2Groupe/RecapLignesMontants) : sans
+          lui, `ThemedView` retombe sur son fond par défaut (`background`,
+          voir src/components/themed-view.tsx) — visuellement distinct du
+          fond de cette carte et donc rendu comme un rectangle clair
+          « en trop » derrière chaque groupe niveau 2, repéré sur device par
+          le développeur (mockup vs réalité) après le merge initial de
+          #63. Contrairement à `Niveau2Ligne` (onglet Dépenses, #41), qui
+          affiche *volontairement* une carte imbriquée `background` sur fond
+          `backgroundElement` (effet « encastré » du pavé niveau 1) : ce
+          récapitulatif vise au contraire une carte plate d'un seul tenant
+          (maquette « B », voir docs/design/charte-graphique.md), donc même
+          fond partout plutôt que ce contraste. */}
+      <ThemedView type="backgroundElement" style={styles.paveHeader}>
         <ThemedText type="smallBold">{titre}</ThemedText>
         <ThemedText type="smallBold" style={styles.tabularNums}>
           {formatCentimesEnEuros(total)}
         </ThemedText>
       </ThemedView>
 
-      <ThemedView style={styles.typesList}>
+      <ThemedView type="backgroundElement" style={styles.typesList}>
         {types.map((type) => (
           <RecapNiveau2Groupe
             key={type.id}
@@ -2120,10 +2133,13 @@ function RecapNiveau2Groupe({
     }));
 
   return (
-    <ThemedView>
-      <ThemedView style={styles.niveau2Header}>
+    <ThemedView type="backgroundElement">
+      <ThemedView type="backgroundElement" style={styles.niveau2Header}>
         <ThemedText type="smallBold">{item.libelle}</ThemedText>
-        <ThemedText type="small" style={styles.tabularNums}>
+        {/* `smallBold` (pas `small`) : le sous-total niveau 2 reste en gras,
+            comme sur la maquette — seules les lignes niveau 3 en dessous
+            passent en `textSecondary`/poids normal (RecapLignesMontants). */}
+        <ThemedText type="smallBold" style={styles.tabularNums}>
           {formatCentimesEnEuros(total)}
         </ThemedText>
       </ThemedView>
@@ -2138,10 +2154,13 @@ function RecapNiveau2Groupe({
 // que dupliquée entre les lignes niveau 3 (`RecapNiveau2Groupe`, indentées)
 // et les revenus (`BudgetTab`, non indentés) du récapitulatif d'un mois
 // (ticket #63) : même présentation dans les deux cas, seule l'indentation
-// diffère. Couleur du séparateur dépendante du thème (`theme.backgroundElement`)
-// — non exprimable dans `StyleSheet.create`, donc calculée ici plutôt que
-// dans une variante statique de `styles.niveau3Row` (même contrainte que
-// `TypeDepenseNiveau3Row` dans DepensesTab).
+// diffère. Couleur du séparateur dépendante du thème (`theme.backgroundSelected`
+// — un ton au-dessus du fond `backgroundElement` de la carte, pour rester
+// visible dessus, voir le canvas de maquettes du ticket) — non exprimable
+// dans `StyleSheet.create`, donc calculée ici plutôt que dans une variante
+// statique de `styles.niveau3Row` (même contrainte que `TypeDepenseNiveau3Row`
+// dans DepensesTab). `type="backgroundElement"` explicite sur chaque
+// `ThemedView` : voir le commentaire de RecapNiveau1Card.
 function RecapLignesMontants({
   lignes,
   indentee,
@@ -2154,22 +2173,37 @@ function RecapLignesMontants({
   const theme = useTheme();
 
   return (
-    <ThemedView>
+    <ThemedView type="backgroundElement">
       {lignes.map((ligne, index) => (
         <ThemedView
           key={ligne.id}
+          type="backgroundElement"
           style={[
             styles.niveau3RowMain,
             indentee ? styles.niveau3Row : undefined,
             index === 0
               ? undefined
-              : { borderTopWidth: 1, borderTopColor: theme.backgroundElement },
+              : { borderTopWidth: 1, borderTopColor: theme.backgroundSelected },
           ]}
         >
-          <ThemedText type="small" style={styles.niveau3Libelle}>
+          {/* Lignes niveau 3 (`indentee`) en `textSecondary` — spec figée du
+              ticket #63 (« pas de gris ici contrairement aux lignes niveau 3 »
+              pour les revenus, a contrario) : distingue visuellement le
+              détail niveau 3 du sous-total niveau 2 juste au-dessus.
+              Manquait dans le premier commit (repéré par le développeur sur
+              device : couleur uniforme, sans le contraste de la maquette). */}
+          <ThemedText
+            type="small"
+            themeColor={indentee ? 'textSecondary' : undefined}
+            style={styles.niveau3Libelle}
+          >
             {ligne.libelle}
           </ThemedText>
-          <ThemedText type="small" style={styles.tabularNums}>
+          <ThemedText
+            type="small"
+            themeColor={indentee ? 'textSecondary' : undefined}
+            style={styles.tabularNums}
+          >
             {formatCentimesEnEuros(ligne.montant)}
           </ThemedText>
         </ThemedView>
