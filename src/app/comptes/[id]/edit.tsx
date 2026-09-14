@@ -2300,8 +2300,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
   },
+  // `alignSelf: 'stretch'` (ticket #64) : sans lui, `paveHeader` centre ce
+  // `Pressable` sur sa hauteur de contenu (~24px, chevron + texte) à
+  // l'intérieur des 44px du header (`alignItems: 'center'` du parent ne
+  // fait qu'aligner, pas grandir) — la zone tactile utile ne couvrait donc
+  // que le milieu de la ligne, pas ses 44px pleins, malgré `flex: 1` qui ne
+  // corrige que la largeur. Repéré sur device par le développeur (le
+  // chevron/libellé sont déjà dans ce même `Pressable`, voir le composant).
   paveHeaderLabel: {
     flex: 1,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
@@ -2348,8 +2356,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 44,
   },
+  // Même correctif que `paveHeaderLabel` ci-dessus (ticket #64).
   niveau2HeaderLabel: {
     flex: 1,
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
