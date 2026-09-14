@@ -2032,10 +2032,13 @@ function BudgetTab({
 // Carte récapitulative niveau 1 (Fixe/Variable), lecture seule — détail d'un
 // mois de l'onglet Budget (ticket #63, maquette « B — Cartes »). Réutilise
 // le style `pave`/`paveHeader` des pavés niveau 1 de l'onglet Dépenses
-// (#41), sans chevron ni bouton « + » (rien n'est collapsable ni éditable
-// ici) : mêmes tokens plutôt qu'un nouveau style de carte, cohérent avec le
+// (#41) : mêmes tokens plutôt qu'un nouveau style de carte, cohérent avec le
 // choix déjà documenté pour ce ticket (voir commentaire au-dessus de
-// BudgetTab).
+// BudgetTab). Collapsable en cliquant sur le chevron/libellé — même
+// comportement que `Niveau1Pave` (Dépenses), ouvert par défaut, à la
+// demande du développeur après validation du reste de l'écran (pas dans la
+// spec figée initiale du ticket) ; sans bouton « + », toujours en lecture
+// seule.
 function RecapNiveau1Card({
   titre,
   types,
@@ -2047,6 +2050,8 @@ function RecapNiveau1Card({
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
 }) {
+  const theme = useTheme();
+  const [ouvert, setOuvert] = useState(true);
   const total = sommeNiveau1(types, sommeParNiveau2);
 
   // Pas de carte pour un niveau 1 sans aucun type de dépense défini, ou dont
@@ -2076,33 +2081,45 @@ function RecapNiveau1Card({
           (maquette « B », voir docs/design/charte-graphique.md), donc même
           fond partout plutôt que ce contraste. */}
       <ThemedView type="backgroundElement" style={styles.paveHeader}>
-        <ThemedText type="smallBold">{titre}</ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} la carte ${titre}`}
+          onPress={() => setOuvert((valeur) => !valeur)}
+          style={styles.paveHeaderLabel}
+        >
+          <ChevronIcon color={theme.text} open={ouvert} />
+          <ThemedText type="smallBold">{titre}</ThemedText>
+        </Pressable>
         <ThemedText type="smallBold" style={styles.tabularNums}>
           {formatCentimesEnEuros(total)}
         </ThemedText>
       </ThemedView>
 
-      <ThemedView type="backgroundElement" style={styles.typesList}>
-        {types.map((type) => (
-          <RecapNiveau2Groupe
-            key={type.id}
-            item={type}
-            montantsParType3={montantsParType3}
-            sommeParNiveau2={sommeParNiveau2}
-          />
-        ))}
-      </ThemedView>
+      {ouvert ? (
+        <ThemedView type="backgroundElement" style={styles.typesList}>
+          {types.map((type) => (
+            <RecapNiveau2Groupe
+              key={type.id}
+              item={type}
+              montantsParType3={montantsParType3}
+              sommeParNiveau2={sommeParNiveau2}
+            />
+          ))}
+        </ThemedView>
+      ) : null}
     </ThemedView>
   );
 }
 
-// Groupe niveau 2 d'une carte récapitulative (ticket #63) : en-tête (libellé
-// + sous-total, style `niveau2Header` de l'onglet Dépenses) puis, en
-// dessous, les lignes niveau 3 ayant un montant ce mois-ci. Contrairement à
-// `Niveau2Ligne` (onglet Dépenses), non collapsable — tout est déjà en
-// lecture seule, pas de raison de replier — et les lignes niveau 3 sans
-// montant ce mois (absentes/non saisies) sont omises plutôt qu'affichées
-// avec un texte de substitution : un récapitulatif liste ce qui a été
+// Groupe niveau 2 d'une carte récapitulative (ticket #63) : en-tête (chevron
+// + libellé + sous-total, style `niveau2Header` de l'onglet Dépenses) puis,
+// en dessous, les lignes niveau 3 ayant un montant ce mois-ci. Collapsable
+// en cliquant sur le chevron/libellé — même comportement que `Niveau2Ligne`
+// (Dépenses), replié par défaut, à la demande du développeur (pas dans la
+// spec figée initiale du ticket, qui prévoyait ce groupe non collapsable —
+// voir RecapNiveau1Card). Les lignes niveau 3 sans montant ce mois
+// (absentes/non saisies) restent omises plutôt qu'affichées avec un texte
+// de substitution, replié ou non : un récapitulatif liste ce qui a été
 // dépensé, pas ce qui reste à saisir (contrairement à DepensesTab, qui est
 // un écran de saisie et doit donc lister aussi les lignes vides).
 function RecapNiveau2Groupe({
@@ -2114,6 +2131,8 @@ function RecapNiveau2Groupe({
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
 }) {
+  const theme = useTheme();
+  const [ouvert, setOuvert] = useState(false);
   const total = sommeParNiveau2.get(item.id) ?? 0;
   const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(item.id), [item.id]);
 
@@ -2135,7 +2154,15 @@ function RecapNiveau2Groupe({
   return (
     <ThemedView type="backgroundElement">
       <ThemedView type="backgroundElement" style={styles.niveau2Header}>
-        <ThemedText type="smallBold">{item.libelle}</ThemedText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${item.libelle}`}
+          onPress={() => setOuvert((valeur) => !valeur)}
+          style={styles.niveau2HeaderLabel}
+        >
+          <ChevronIcon color={theme.text} open={ouvert} size={14} />
+          <ThemedText type="smallBold">{item.libelle}</ThemedText>
+        </Pressable>
         {/* `smallBold` (pas `small`) : le sous-total niveau 2 reste en gras,
             comme sur la maquette — seules les lignes niveau 3 en dessous
             passent en `textSecondary`/poids normal (RecapLignesMontants). */}
@@ -2144,7 +2171,7 @@ function RecapNiveau2Groupe({
         </ThemedText>
       </ThemedView>
 
-      {lignes.length > 0 ? <RecapLignesMontants lignes={lignes} indentee /> : null}
+      {ouvert && lignes.length > 0 ? <RecapLignesMontants lignes={lignes} indentee /> : null}
     </ThemedView>
   );
 }

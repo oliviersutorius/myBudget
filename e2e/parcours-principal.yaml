@@ -93,6 +93,11 @@ appId: com.mybudget.app
 - tapOn:
     text: '.*Voir le détail de.*'
     index: 0
+# Le groupe niveau 2 « Loyer » est replié par défaut (même comportement que
+# Niveau2Ligne côté Dépenses, ajouté après la première maquette du ticket
+# #63) : il faut le déplier pour voir la ligne niveau 3 « Loyer
+# appartement » en dessous.
+- tapOn: 'Déplier le type de dépense Loyer'
 - assertVisible: 'Loyer appartement'
 - assertVisible: 'Salaire'
 - assertVisible: '.*800,00.*'
