@@ -66,11 +66,13 @@ appId: com.mybudget.app
 - assertVisible: 'Loyer appartement'
 
 # --- Ticket #64 : un tap sur l'intitulé (pas seulement le chevron) replie/
-# déplie la ligne niveau 2 — regex sur l'accessibilityLabel, id du type
-# niveau 2 inconnu à l'avance (même motif que le menu « ⋮ » plus haut). ---
-- tapOn: '.*type de dépense Loyer.*'
+# déplie la ligne niveau 2 — regex ancrée sur « Replier »/« Déplier »
+# (review N1 : un simple `.*type de dépense Loyer.*` matche aussi le bouton
+# « ⋮ » adjacent, `Actions pour le type de dépense Loyer (#id)`, rendant le
+# tap ambigu). Id du type niveau 2 inconnu à l'avance, d'où le `.*` final. ---
+- tapOn: '.*(Replier|Déplier) le type de dépense Loyer.*'
 - assertNotVisible: 'Loyer appartement'
-- tapOn: '.*type de dépense Loyer.*'
+- tapOn: '.*(Replier|Déplier) le type de dépense Loyer.*'
 - assertVisible: 'Loyer appartement'
 
 # --- Onglet Revenus : revenu sur le mois courant (sélecteur de mois déjà
