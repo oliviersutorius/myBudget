@@ -130,6 +130,31 @@ function grouperParMois<T extends { mois: string }>(lignes: T[]): Map<string, T[
   return groupes;
 }
 
+// Sépare une liste de types niveau 2 en Fixe/Variable — utilisé par
+// DepensesTab (ticket #41) et par le récapitulatif d'un mois de BudgetTab
+// (ticket #63), factorisé ici plutôt que dupliqué (review N1 de #63) après
+// avoir vécu comme deux `.filter()` répétés dans chacun des deux onglets.
+function splitTypesParNiveau1(types: TypeDepenseNiveau2[]): {
+  fixe: TypeDepenseNiveau2[];
+  variable: TypeDepenseNiveau2[];
+} {
+  return {
+    fixe: types.filter((type) => type.niveau1 === 'fixe'),
+    variable: types.filter((type) => type.niveau1 === 'variable'),
+  };
+}
+
+// Somme les sous-totaux niveau 2 (`sommeParNiveau2`) d'une liste de types
+// niveau 2 — utilisé par DepensesTab (total du pavé niveau 1) et par
+// RecapNiveau1Card (ticket #63), factorisé ici pour la même raison que
+// `splitTypesParNiveau1` ci-dessus (review N1 de #63).
+function sommeNiveau1(
+  typesDuNiveau1: TypeDepenseNiveau2[],
+  sommeParNiveau2: Map<number, number>,
+): number {
+  return typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
+}
+
 // Sélecteur de mois navigable (‹ Mois Année ›), extrait de l'onglet Revenus
 // (ticket #12) pour être réutilisé par le pavé Variable de l'onglet
 // Dépenses (ticket #52) — même pattern visuel (styles.anneeSelectorRow/
@@ -601,12 +626,7 @@ function DepensesTab({
     [variableCompte],
   );
 
-  const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
-  const typesVariable = types.filter((type) => type.niveau1 === 'variable');
-  const sommeNiveau1 = (
-    typesDuNiveau1: TypeDepenseNiveau2[],
-    sommeParNiveau2: Map<number, number>,
-  ) => typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
+  const { fixe: typesFixe, variable: typesVariable } = splitTypesParNiveau1(types);
 
   return (
     <ThemedView style={styles.section}>
@@ -1835,40 +1855,28 @@ function BudgetTab({
     return resultat;
   }, [historiqueCompte, variableParMois, revenusParMois, annee]);
 
-  // Clé 'YYYY-MM' du mois affiché en détail (ticket #63) — `null` tant
-  // qu'aucun mois n'est sélectionné (vue liste). Calculée avant le early
-  // return ci-dessous (règle des hooks : tous les Hooks de ce composant
-  // doivent s'exécuter dans le même ordre à chaque rendu).
-  const moisSelectionneCle =
-    moisSelectionne !== null ? `${annee}-${String(moisSelectionne).padStart(2, '0')}` : null;
-
-  // Détail niveau 2/niveau 3 du mois sélectionné, fixe et variable (ticket
-  // #63) : mêmes fonctions que `disponiblesParMois` ci-dessus
-  // (`resolveMontantsNiveau3Compte`/`agregerMontantsNiveau3Compte`), qui
-  // renvoient aussi `montantsParType3` — pas exploité par
-  // `disponiblesParMois` (seul le total l'intéresse) mais nécessaire ici
-  // pour afficher chaque ligne niveau 3 du récapitulatif.
-  const recapFixe = useMemo(
-    () =>
-      moisSelectionneCle !== null
-        ? resolveMontantsNiveau3Compte(historiqueCompte, moisSelectionneCle)
-        : null,
-    [historiqueCompte, moisSelectionneCle],
-  );
-  const recapVariable = useMemo(
-    () =>
-      moisSelectionneCle !== null
-        ? agregerMontantsNiveau3Compte(variableParMois.get(moisSelectionneCle) ?? [])
-        : null,
-    [variableParMois, moisSelectionneCle],
-  );
-  const revenusDuMoisSelectionne =
-    moisSelectionneCle !== null ? (revenusParMois.get(moisSelectionneCle) ?? []) : [];
-
   if (moisSelectionne !== null) {
     const disponible = disponiblesParMois.get(moisSelectionne) ?? 0;
-    const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
-    const typesVariable = types.filter((type) => type.niveau1 === 'variable');
+    const moisSelectionneCle = `${annee}-${String(moisSelectionne).padStart(2, '0')}`;
+    const { fixe: typesFixe, variable: typesVariable } = splitTypesParNiveau1(types);
+
+    // Détail niveau 2/niveau 3 du mois affiché, fixe et variable (ticket
+    // #63) : mêmes fonctions que `disponiblesParMois` ci-dessus
+    // (`resolveMontantsNiveau3Compte`/`agregerMontantsNiveau3Compte`), qui
+    // renvoient aussi `montantsParType3` — pas exploité par
+    // `disponiblesParMois` (seul le total l'intéresse) mais nécessaire ici
+    // pour afficher chaque ligne niveau 3 du récapitulatif. Pas de
+    // `useMemo` ici (contrairement à `disponiblesParMois`) : simple appel de
+    // fonction, pas un Hook, donc pas soumis à la règle qui imposait de le
+    // calculer avant ce `if` — et ce recalcul, redondant avec la boucle de
+    // `disponiblesParMois` sur ce même mois, n'est pas jugé prioritaire à
+    // éviter (même logique que le commentaire de `disponiblesParMois`
+    // ci-dessus : historique d'un compte local, petit en pratique).
+    const recapFixe = resolveMontantsNiveau3Compte(historiqueCompte, moisSelectionneCle);
+    const recapVariable = agregerMontantsNiveau3Compte(
+      variableParMois.get(moisSelectionneCle) ?? [],
+    );
+    const revenusDuMoisSelectionne = revenusParMois.get(moisSelectionneCle) ?? [];
 
     return (
       <ThemedView style={styles.section}>
@@ -1911,22 +1919,21 @@ function BudgetTab({
           <IncitationTypeDepense onAllerVersDepenses={onAllerVersDepenses} />
         ) : (
           <>
-            {recapFixe ? (
-              <RecapNiveau1Card
-                titre={LIBELLE_NIVEAU1.fixe}
-                types={typesFixe}
-                montantsParType3={recapFixe.montantsParType3}
-                sommeParNiveau2={recapFixe.sommeParNiveau2}
-              />
-            ) : null}
-            {recapVariable ? (
-              <RecapNiveau1Card
-                titre={LIBELLE_NIVEAU1.variable}
-                types={typesVariable}
-                montantsParType3={recapVariable.montantsParType3}
-                sommeParNiveau2={recapVariable.sommeParNiveau2}
-              />
-            ) : null}
+            {/* RecapNiveau1Card gère elle-même le cas « pas de carte à
+                afficher » (aucun type niveau 2, ou aucun montant ce mois) —
+                voir son commentaire. */}
+            <RecapNiveau1Card
+              titre={LIBELLE_NIVEAU1.fixe}
+              types={typesFixe}
+              montantsParType3={recapFixe.montantsParType3}
+              sommeParNiveau2={recapFixe.sommeParNiveau2}
+            />
+            <RecapNiveau1Card
+              titre={LIBELLE_NIVEAU1.variable}
+              types={typesVariable}
+              montantsParType3={recapVariable.montantsParType3}
+              sommeParNiveau2={recapVariable.sommeParNiveau2}
+            />
           </>
         )}
 
@@ -1944,6 +1951,17 @@ function BudgetTab({
       </ThemedView>
     );
   }
+
+  // Mois affichés dans la liste (ticket #63) : les 12 mois d'une année
+  // passée, ou seulement jusqu'au mois courant pour l'année courante (pas de
+  // mois futur — voir le chevron « année suivante » ci-dessous, qui empêche
+  // déjà toute année entièrement future). Calculé une fois ici plutôt qu'à
+  // chaque itération du `.map()` ci-dessous (`new Date()` évalué une seule
+  // fois, pas jusqu'à 12 fois par rendu — review N1 de #63), et sous forme
+  // de données (tableau de mois à afficher) plutôt qu'un filtrage au niveau
+  // du JSX (`return null` dans le `.map()`).
+  const moisMaxAffiche = annee === anneeCourante ? new Date().getMonth() + 1 : 12;
+  const moisAffiches = Array.from({ length: moisMaxAffiche }, (_, i) => moisMaxAffiche - i);
 
   return (
     <ThemedView style={styles.section}>
@@ -1984,14 +2002,7 @@ function BudgetTab({
       </ThemedView>
 
       <ThemedView style={styles.typesList}>
-        {MOIS_LIBELLES.map((libelleMois, index) => {
-          const mois = 12 - index;
-          // Ticket #63 : ne pas afficher les mois strictement postérieurs au
-          // mois calendaire courant, pour l'année courante (les années
-          // passées affichent leurs 12 mois sans restriction).
-          if (annee === anneeCourante && mois > new Date().getMonth() + 1) {
-            return null;
-          }
+        {moisAffiches.map((mois) => {
           const disponible = disponiblesParMois.get(mois) ?? 0;
           return (
             <Pressable
@@ -2024,8 +2035,7 @@ function BudgetTab({
 // (#41), sans chevron ni bouton « + » (rien n'est collapsable ni éditable
 // ici) : mêmes tokens plutôt qu'un nouveau style de carte, cohérent avec le
 // choix déjà documenté pour ce ticket (voir commentaire au-dessus de
-// BudgetTab). Ne rend rien si `types` est vide — pas de carte vide pour un
-// niveau 1 sans aucun type de dépense défini.
+// BudgetTab).
 function RecapNiveau1Card({
   titre,
   types,
@@ -2037,11 +2047,18 @@ function RecapNiveau1Card({
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
 }) {
-  if (types.length === 0) {
+  const total = sommeNiveau1(types, sommeParNiveau2);
+
+  // Pas de carte pour un niveau 1 sans aucun type de dépense défini, ou dont
+  // aucun type n'a de montant enregistré ce mois-ci (review N1 de #63) :
+  // `types.length === 0` seul laissait passer une carte avec un en-tête
+  // « Fixe — 0,00 € » et aucune ligne en dessous dès que chaque type
+  // niveau 2 résout à 0 ce mois-là (ex. toutes ses lignes niveau 3 marquées
+  // absentes) — contraire au principe « pas de carte vide » du ticket.
+  // Symétrique du même garde-fou dans RecapNiveau2Groupe ci-dessous.
+  if (types.length === 0 || total === 0) {
     return null;
   }
-
-  const total = types.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
 
   return (
     <ThemedView type="backgroundElement" style={styles.pave}>
