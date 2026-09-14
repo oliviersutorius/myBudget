@@ -83,3 +83,21 @@ appId: com.mybudget.app
 # espace classique — voir src/utils/montant.ts) ---
 - tapOn: 'Onglet Budget'
 - assertVisible: '.*800,00.*'
+
+# --- Détail du mois courant (ticket #63) : le récapitulatif doit lister la
+# ligne niveau 3 et le revenu ajoutés plus haut, plus le montant disponible
+# en hero. Le mois courant est toujours la première ligne de la liste (les
+# mois futurs sont masqués depuis #63) : `index: 0` lève l'ambiguïté du
+# sélecteur regex plutôt que de recalculer le libellé du mois courant en
+# YAML. ---
+- tapOn:
+    text: '.*Voir le détail de.*'
+    index: 0
+# Le groupe niveau 2 « Loyer » est replié par défaut (même comportement que
+# Niveau2Ligne côté Dépenses, ajouté après la première maquette du ticket
+# #63) : il faut le déplier pour voir la ligne niveau 3 « Loyer
+# appartement » en dessous.
+- tapOn: 'Déplier le type de dépense Loyer'
+- assertVisible: 'Loyer appartement'
+- assertVisible: 'Salaire'
+- assertVisible: '.*800,00.*'

@@ -130,6 +130,31 @@ function grouperParMois<T extends { mois: string }>(lignes: T[]): Map<string, T[
   return groupes;
 }
 
+// Sépare une liste de types niveau 2 en Fixe/Variable — utilisé par
+// DepensesTab (ticket #41) et par le récapitulatif d'un mois de BudgetTab
+// (ticket #63), factorisé ici plutôt que dupliqué (review N1 de #63) après
+// avoir vécu comme deux `.filter()` répétés dans chacun des deux onglets.
+function splitTypesParNiveau1(types: TypeDepenseNiveau2[]): {
+  fixe: TypeDepenseNiveau2[];
+  variable: TypeDepenseNiveau2[];
+} {
+  return {
+    fixe: types.filter((type) => type.niveau1 === 'fixe'),
+    variable: types.filter((type) => type.niveau1 === 'variable'),
+  };
+}
+
+// Somme les sous-totaux niveau 2 (`sommeParNiveau2`) d'une liste de types
+// niveau 2 — utilisé par DepensesTab (total du pavé niveau 1) et par
+// RecapNiveau1Card (ticket #63), factorisé ici pour la même raison que
+// `splitTypesParNiveau1` ci-dessus (review N1 de #63).
+function sommeNiveau1(
+  typesDuNiveau1: TypeDepenseNiveau2[],
+  sommeParNiveau2: Map<number, number>,
+): number {
+  return typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
+}
+
 // Sélecteur de mois navigable (‹ Mois Année ›), extrait de l'onglet Revenus
 // (ticket #12) pour être réutilisé par le pavé Variable de l'onglet
 // Dépenses (ticket #52) — même pattern visuel (styles.anneeSelectorRow/
@@ -415,6 +440,7 @@ export default function EditionCompteScreen() {
               <BudgetTab
                 compteId={compteId}
                 historiqueCompte={historiqueCompte}
+                types={typesNiveau2}
                 aucunTypeDepense={aucunTypeDepense}
                 onAllerVersDepenses={() => changerOnglet('depenses')}
               />
@@ -600,12 +626,7 @@ function DepensesTab({
     [variableCompte],
   );
 
-  const typesFixe = types.filter((type) => type.niveau1 === 'fixe');
-  const typesVariable = types.filter((type) => type.niveau1 === 'variable');
-  const sommeNiveau1 = (
-    typesDuNiveau1: TypeDepenseNiveau2[],
-    sommeParNiveau2: Map<number, number>,
-  ) => typesDuNiveau1.reduce((somme, type2) => somme + (sommeParNiveau2.get(type2.id) ?? 0), 0);
+  const { fixe: typesFixe, variable: typesVariable } = splitTypesParNiveau1(types);
 
   return (
     <ThemedView style={styles.section}>
@@ -1742,9 +1763,20 @@ function IncitationTypeDepense({ onAllerVersDepenses }: { onAllerVersDepenses: (
 // chargent sur l'année affichée (une requête chacun) plutôt qu'un aller-
 // retour par mois affiché — voir get-montants-variable-compte-annee.ts et
 // get-revenus-annee.ts.
+//
+// Ticket #63 : la liste masque les mois strictement futurs (le chevron
+// « année suivante » est désactivé au-delà de l'année courante, plutôt que
+// de laisser accéder à une année entièrement future), et le détail d'un
+// mois affiche désormais un récapitulatif en lecture seule des dépenses
+// (niveau 1/niveau 2/niveau 3) et des revenus du mois — maquette « B —
+// Cartes » (voir canvas référencé par le ticket), réimplémentée avec
+// l'échelle `ThemedText`/`Spacing` existante plutôt que les valeurs pixel de
+// la maquette source (même choix que le ticket #41, voir
+// docs/design/charte-graphique.md).
 function BudgetTab({
   compteId,
   historiqueCompte,
+  types,
   aucunTypeDepense,
   onAllerVersDepenses,
 }: {
@@ -1752,6 +1784,11 @@ function BudgetTab({
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
   // EditionCompteScreen, partagé avec DepensesTab — voir HistoriqueCompte).
   historiqueCompte: HistoriqueCompte;
+  // Types de dépense niveau 2 du compte (ticket #63) : même requête que
+  // DepensesTab (chargée une seule fois par EditionCompteScreen, voir
+  // HistoriqueCompte ci-dessus pour la même logique de partage) — fournit
+  // les libellés niveau 1/niveau 2 du récapitulatif d'un mois.
+  types: TypeDepenseNiveau2[];
   // Vrai si le compte n'a encore aucun type de dépense niveau 2 (ticket
   // #20) : calculé une fois par EditionCompteScreen à partir de la même
   // requête que DepensesTab plutôt que d'être re-résolu ici, pour éviter
@@ -1765,7 +1802,8 @@ function BudgetTab({
   // ce composant, qui n'a pas connaissance des autres onglets.
   onAllerVersDepenses: () => void;
 }) {
-  const [annee, setAnnee] = useState(() => new Date().getFullYear());
+  const anneeCourante = new Date().getFullYear();
+  const [annee, setAnnee] = useState(anneeCourante);
   const [moisSelectionne, setMoisSelectionne] = useState<number | null>(null);
 
   const { data: variableAnnee } = useLiveQuery(
@@ -1819,6 +1857,26 @@ function BudgetTab({
 
   if (moisSelectionne !== null) {
     const disponible = disponiblesParMois.get(moisSelectionne) ?? 0;
+    const moisSelectionneCle = `${annee}-${String(moisSelectionne).padStart(2, '0')}`;
+    const { fixe: typesFixe, variable: typesVariable } = splitTypesParNiveau1(types);
+
+    // Détail niveau 2/niveau 3 du mois affiché, fixe et variable (ticket
+    // #63) : mêmes fonctions que `disponiblesParMois` ci-dessus
+    // (`resolveMontantsNiveau3Compte`/`agregerMontantsNiveau3Compte`), qui
+    // renvoient aussi `montantsParType3` — pas exploité par
+    // `disponiblesParMois` (seul le total l'intéresse) mais nécessaire ici
+    // pour afficher chaque ligne niveau 3 du récapitulatif. Pas de
+    // `useMemo` ici (contrairement à `disponiblesParMois`) : simple appel de
+    // fonction, pas un Hook, donc pas soumis à la règle qui imposait de le
+    // calculer avant ce `if` — et ce recalcul, redondant avec la boucle de
+    // `disponiblesParMois` sur ce même mois, n'est pas jugé prioritaire à
+    // éviter (même logique que le commentaire de `disponiblesParMois`
+    // ci-dessus : historique d'un compte local, petit en pratique).
+    const recapFixe = resolveMontantsNiveau3Compte(historiqueCompte, moisSelectionneCle);
+    const recapVariable = agregerMontantsNiveau3Compte(
+      variableParMois.get(moisSelectionneCle) ?? [],
+    );
+    const revenusDuMoisSelectionne = revenusParMois.get(moisSelectionneCle) ?? [];
 
     return (
       <ThemedView style={styles.section}>
@@ -1830,33 +1888,80 @@ function BudgetTab({
           <ThemedText type="link">‹ Retour aux mois</ThemedText>
         </Pressable>
 
-        <ThemedText type="smallBold">
+        {/* Titre agrandi (ticket #63, point 2) : `subtitle` (32/600) plutôt
+            que `smallBold` (14/700) — token existant, pas de taille en dur
+            (voir docs/design/charte-graphique.md § Typographie). */}
+        <ThemedText type="subtitle">
           {MOIS_LIBELLES[moisSelectionne - 1]} {annee}
         </ThemedText>
 
-        <ThemedView style={styles.totalRow}>
-          <ThemedText type="small" themeColor="textSecondary">
+        {/* Hero « Montant disponible » (ticket #63, maquette B) : mis en
+            avant juste sous le titre, avant le détail des cartes — repris
+            avant le retrait de l'ancien texte de renvoi ci-dessous. Comme
+            sur la vue liste, seul le négatif change de couleur (`danger`) :
+            pas de vert introduit pour le positif, cohérent avec le reste de
+            l'app (voir « Sémantique des couleurs d'action »,
+            docs/design/charte-graphique.md). */}
+        <ThemedView type="backgroundSelected" style={styles.recapHero}>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.recapHeroLabel}>
             Montant disponible
           </ThemedText>
           <ThemedText
             type="smallBold"
             themeColor={disponible < 0 ? 'danger' : undefined}
-            style={styles.tabularNums}
+            style={[styles.recapHeroValeur, styles.tabularNums]}
           >
             {formatCentimesEnEuros(disponible)}
           </ThemedText>
         </ThemedView>
 
-        <ThemedText type="small" themeColor="textSecondary">
-          Détail des dépenses et revenus du mois : voir les onglets Dépenses et Revenus.
-        </ThemedText>
-
         {aucunTypeDepense ? (
           <IncitationTypeDepense onAllerVersDepenses={onAllerVersDepenses} />
+        ) : (
+          <>
+            {/* RecapNiveau1Card gère elle-même le cas « pas de carte à
+                afficher » (aucun type niveau 2, ou aucun montant ce mois) —
+                voir son commentaire. */}
+            <RecapNiveau1Card
+              titre={LIBELLE_NIVEAU1.fixe}
+              types={typesFixe}
+              montantsParType3={recapFixe.montantsParType3}
+              sommeParNiveau2={recapFixe.sommeParNiveau2}
+            />
+            <RecapNiveau1Card
+              titre={LIBELLE_NIVEAU1.variable}
+              types={typesVariable}
+              montantsParType3={recapVariable.montantsParType3}
+              sommeParNiveau2={recapVariable.sommeParNiveau2}
+            />
+          </>
+        )}
+
+        {revenusDuMoisSelectionne.length > 0 ? (
+          <ThemedView type="backgroundElement" style={styles.pave}>
+            <ThemedView type="backgroundElement" style={styles.paveHeader}>
+              <ThemedText type="smallBold">Revenus</ThemedText>
+              <ThemedText type="smallBold" style={styles.tabularNums}>
+                {formatCentimesEnEuros(sommerMontants(revenusDuMoisSelectionne))}
+              </ThemedText>
+            </ThemedView>
+            <RecapLignesMontants lignes={revenusDuMoisSelectionne} indentee={false} />
+          </ThemedView>
         ) : null}
       </ThemedView>
     );
   }
+
+  // Mois affichés dans la liste (ticket #63) : les 12 mois d'une année
+  // passée, ou seulement jusqu'au mois courant pour l'année courante (pas de
+  // mois futur — voir le chevron « année suivante » ci-dessous, qui empêche
+  // déjà toute année entièrement future). Calculé une fois ici plutôt qu'à
+  // chaque itération du `.map()` ci-dessous (`new Date()` évalué une seule
+  // fois, pas jusqu'à 12 fois par rendu — review N1 de #63), et sous forme
+  // de données (tableau de mois à afficher) plutôt qu'un filtrage au niveau
+  // du JSX (`return null` dans le `.map()`).
+  const moisMaxAffiche = annee === anneeCourante ? new Date().getMonth() + 1 : 12;
+  const moisAffiches = Array.from({ length: moisMaxAffiche }, (_, i) => moisMaxAffiche - i);
 
   return (
     <ThemedView style={styles.section}>
@@ -1875,20 +1980,29 @@ function BudgetTab({
           </ThemedText>
         </Pressable>
         <ThemedText type="smallBold">{annee}</ThemedText>
+        {/* Ticket #63 : pas de navigation vers une année entièrement
+            future — cohérent avec le masquage des mois futurs ci-dessous
+            (aucune raison de pouvoir consulter une année dont aucun mois
+            n'est encore passé). Le chevron « année précédente » n'est pas
+            concerné. */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Année suivante"
+          disabled={annee >= anneeCourante}
           onPress={() => setAnnee((valeur) => valeur + 1)}
         >
-          <ThemedText type="title" style={styles.anneeChevron}>
+          <ThemedText
+            type="title"
+            themeColor={annee >= anneeCourante ? 'textSecondary' : undefined}
+            style={styles.anneeChevron}
+          >
             ›
           </ThemedText>
         </Pressable>
       </ThemedView>
 
       <ThemedView style={styles.typesList}>
-        {MOIS_LIBELLES.map((libelleMois, index) => {
-          const mois = 12 - index;
+        {moisAffiches.map((mois) => {
           const disponible = disponiblesParMois.get(mois) ?? 0;
           return (
             <Pressable
@@ -1911,6 +2025,216 @@ function BudgetTab({
           );
         })}
       </ThemedView>
+    </ThemedView>
+  );
+}
+
+// Carte récapitulative niveau 1 (Fixe/Variable), lecture seule — détail d'un
+// mois de l'onglet Budget (ticket #63, maquette « B — Cartes »). Réutilise
+// le style `pave`/`paveHeader` des pavés niveau 1 de l'onglet Dépenses
+// (#41) : mêmes tokens plutôt qu'un nouveau style de carte, cohérent avec le
+// choix déjà documenté pour ce ticket (voir commentaire au-dessus de
+// BudgetTab). Collapsable en cliquant sur le chevron/libellé — même
+// comportement que `Niveau1Pave` (Dépenses), ouvert par défaut, à la
+// demande du développeur après validation du reste de l'écran (pas dans la
+// spec figée initiale du ticket) ; sans bouton « + », toujours en lecture
+// seule.
+function RecapNiveau1Card({
+  titre,
+  types,
+  montantsParType3,
+  sommeParNiveau2,
+}: {
+  titre: string;
+  types: TypeDepenseNiveau2[];
+  montantsParType3: MontantsParType3;
+  sommeParNiveau2: Map<number, number>;
+}) {
+  const theme = useTheme();
+  const [ouvert, setOuvert] = useState(true);
+  const total = sommeNiveau1(types, sommeParNiveau2);
+
+  // Pas de carte pour un niveau 1 sans aucun type de dépense défini, ou dont
+  // aucun type n'a de montant enregistré ce mois-ci (review N1 de #63) :
+  // `types.length === 0` seul laissait passer une carte avec un en-tête
+  // « Fixe — 0,00 € » et aucune ligne en dessous dès que chaque type
+  // niveau 2 résout à 0 ce mois-là (ex. toutes ses lignes niveau 3 marquées
+  // absentes) — contraire au principe « pas de carte vide » du ticket.
+  // Symétrique du même garde-fou dans RecapNiveau2Groupe ci-dessous.
+  if (types.length === 0 || total === 0) {
+    return null;
+  }
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.pave}>
+      {/* `type="backgroundElement"` explicite sur chaque `ThemedView` de cet
+          arbre (ici et dans RecapNiveau2Groupe/RecapLignesMontants) : sans
+          lui, `ThemedView` retombe sur son fond par défaut (`background`,
+          voir src/components/themed-view.tsx) — visuellement distinct du
+          fond de cette carte et donc rendu comme un rectangle clair
+          « en trop » derrière chaque groupe niveau 2, repéré sur device par
+          le développeur (mockup vs réalité) après le merge initial de
+          #63. Contrairement à `Niveau2Ligne` (onglet Dépenses, #41), qui
+          affiche *volontairement* une carte imbriquée `background` sur fond
+          `backgroundElement` (effet « encastré » du pavé niveau 1) : ce
+          récapitulatif vise au contraire une carte plate d'un seul tenant
+          (maquette « B », voir docs/design/charte-graphique.md), donc même
+          fond partout plutôt que ce contraste. */}
+      <ThemedView type="backgroundElement" style={styles.paveHeader}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} la carte ${titre}`}
+          onPress={() => setOuvert((valeur) => !valeur)}
+          style={styles.paveHeaderLabel}
+        >
+          <ChevronIcon color={theme.text} open={ouvert} />
+          <ThemedText type="smallBold">{titre}</ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold" style={styles.tabularNums}>
+          {formatCentimesEnEuros(total)}
+        </ThemedText>
+      </ThemedView>
+
+      {ouvert ? (
+        <ThemedView type="backgroundElement" style={styles.typesList}>
+          {types.map((type) => (
+            <RecapNiveau2Groupe
+              key={type.id}
+              item={type}
+              montantsParType3={montantsParType3}
+              sommeParNiveau2={sommeParNiveau2}
+            />
+          ))}
+        </ThemedView>
+      ) : null}
+    </ThemedView>
+  );
+}
+
+// Groupe niveau 2 d'une carte récapitulative (ticket #63) : en-tête (chevron
+// + libellé + sous-total, style `niveau2Header` de l'onglet Dépenses) puis,
+// en dessous, les lignes niveau 3 ayant un montant ce mois-ci. Collapsable
+// en cliquant sur le chevron/libellé — même comportement que `Niveau2Ligne`
+// (Dépenses), replié par défaut, à la demande du développeur (pas dans la
+// spec figée initiale du ticket, qui prévoyait ce groupe non collapsable —
+// voir RecapNiveau1Card). Les lignes niveau 3 sans montant ce mois
+// (absentes/non saisies) restent omises plutôt qu'affichées avec un texte
+// de substitution, replié ou non : un récapitulatif liste ce qui a été
+// dépensé, pas ce qui reste à saisir (contrairement à DepensesTab, qui est
+// un écran de saisie et doit donc lister aussi les lignes vides).
+function RecapNiveau2Groupe({
+  item,
+  montantsParType3,
+  sommeParNiveau2,
+}: {
+  item: TypeDepenseNiveau2;
+  montantsParType3: MontantsParType3;
+  sommeParNiveau2: Map<number, number>;
+}) {
+  const theme = useTheme();
+  const [ouvert, setOuvert] = useState(false);
+  const total = sommeParNiveau2.get(item.id) ?? 0;
+  const { data: sousTypes } = useLiveQuery(getTypesDepenseNiveau3Query(item.id), [item.id]);
+
+  // Pas de ligne pour un type niveau 2 sans montant enregistré ce mois-ci
+  // (aucune ligne niveau 3 renseignée) — étend aux groupes niveau 2 le
+  // principe « pas de carte vide » du ticket #63 (voir RecapNiveau1Card).
+  if (total === 0) {
+    return null;
+  }
+
+  const lignes = sousTypes
+    .filter((sousType) => montantsParType3.get(sousType.id) != null)
+    .map((sousType) => ({
+      id: sousType.id,
+      libelle: sousType.libelle,
+      montant: montantsParType3.get(sousType.id) as number,
+    }));
+
+  return (
+    <ThemedView type="backgroundElement">
+      <ThemedView type="backgroundElement" style={styles.niveau2Header}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${ouvert ? 'Replier' : 'Déplier'} le type de dépense ${item.libelle}`}
+          onPress={() => setOuvert((valeur) => !valeur)}
+          style={styles.niveau2HeaderLabel}
+        >
+          <ChevronIcon color={theme.text} open={ouvert} size={14} />
+          <ThemedText type="smallBold">{item.libelle}</ThemedText>
+        </Pressable>
+        {/* `smallBold` (pas `small`) : le sous-total niveau 2 reste en gras,
+            comme sur la maquette — seules les lignes niveau 3 en dessous
+            passent en `textSecondary`/poids normal (RecapLignesMontants). */}
+        <ThemedText type="smallBold" style={styles.tabularNums}>
+          {formatCentimesEnEuros(total)}
+        </ThemedText>
+      </ThemedView>
+
+      {ouvert && lignes.length > 0 ? <RecapLignesMontants lignes={lignes} indentee /> : null}
+    </ThemedView>
+  );
+}
+
+// Liste de lignes libellé + montant en lecture seule, avec un séparateur fin
+// entre lignes (mais pas au-dessus de la première) — factorisée ici plutôt
+// que dupliquée entre les lignes niveau 3 (`RecapNiveau2Groupe`, indentées)
+// et les revenus (`BudgetTab`, non indentés) du récapitulatif d'un mois
+// (ticket #63) : même présentation dans les deux cas, seule l'indentation
+// diffère. Couleur du séparateur dépendante du thème (`theme.backgroundSelected`
+// — un ton au-dessus du fond `backgroundElement` de la carte, pour rester
+// visible dessus, voir le canvas de maquettes du ticket) — non exprimable
+// dans `StyleSheet.create`, donc calculée ici plutôt que dans une variante
+// statique de `styles.niveau3Row` (même contrainte que `TypeDepenseNiveau3Row`
+// dans DepensesTab). `type="backgroundElement"` explicite sur chaque
+// `ThemedView` : voir le commentaire de RecapNiveau1Card.
+function RecapLignesMontants({
+  lignes,
+  indentee,
+}: {
+  lignes: { id: number; libelle: string; montant: number }[];
+  /** Lignes niveau 3 sous un groupe niveau 2 (indentées, `styles.niveau3Row`)
+   * vs. lignes de premier niveau — revenus (non indentées). */
+  indentee: boolean;
+}) {
+  const theme = useTheme();
+
+  return (
+    <ThemedView type="backgroundElement">
+      {lignes.map((ligne, index) => (
+        <ThemedView
+          key={ligne.id}
+          type="backgroundElement"
+          style={[
+            styles.niveau3RowMain,
+            indentee ? styles.niveau3Row : undefined,
+            index === 0
+              ? undefined
+              : { borderTopWidth: 1, borderTopColor: theme.backgroundSelected },
+          ]}
+        >
+          {/* Lignes niveau 3 (`indentee`) en `textSecondary` — spec figée du
+              ticket #63 (« pas de gris ici contrairement aux lignes niveau 3 »
+              pour les revenus, a contrario) : distingue visuellement le
+              détail niveau 3 du sous-total niveau 2 juste au-dessus.
+              Manquait dans le premier commit (repéré par le développeur sur
+              device : couleur uniforme, sans le contraste de la maquette). */}
+          <ThemedText
+            type="small"
+            themeColor={indentee ? 'textSecondary' : undefined}
+            style={styles.niveau3Libelle}
+          >
+            {ligne.libelle}
+          </ThemedText>
+          <ThemedText
+            type="small"
+            themeColor={indentee ? 'textSecondary' : undefined}
+            style={styles.tabularNums}
+          >
+            {formatCentimesEnEuros(ligne.montant)}
+          </ThemedText>
+        </ThemedView>
+      ))}
     </ThemedView>
   );
 }
@@ -2120,5 +2444,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  // Hero « Montant disponible » du récapitulatif d'un mois (ticket #63,
+  // maquette « B — Cartes ») : mis en avant sous le titre du mois, avant le
+  // détail des cartes Fixe/Variable/Revenus.
+  recapHero: {
+    alignItems: 'center',
+    gap: Spacing.half,
+    borderRadius: Spacing.three,
+    paddingVertical: Spacing.four,
+    paddingHorizontal: Spacing.three,
+  },
+  recapHeroLabel: {
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Valeur du hero : base `smallBold` (14/700) agrandie pour ce seul usage —
+  // même exception que `anneeChevron` ci-dessus (taille ad hoc superposée à
+  // un `type` existant plutôt qu'un nouveau `type` `ThemedText` pour un
+  // besoin isolé).
+  recapHeroValeur: {
+    fontSize: 26,
+    lineHeight: 30,
   },
 });
