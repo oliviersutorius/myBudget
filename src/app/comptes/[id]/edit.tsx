@@ -350,6 +350,11 @@ export default function EditionCompteScreen() {
   const [introuvable, setIntrouvable] = useState(false);
   const [nom, setNom] = useState('');
   const [banque, setBanque] = useState('');
+  // Nom persisté (distinct de `nom` ci-dessus, qui suit la saisie du champ
+  // « Nom » sans attendre l'enregistrement) : la popup de suppression doit
+  // toujours refléter le nom réellement enregistré du compte, pas une
+  // édition en cours et non sauvegardée du champ « Nom » (review N1 de #67).
+  const [nomEnregistre, setNomEnregistre] = useState('');
   const [errors, setErrors] = useState<CompteFormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
@@ -383,6 +388,7 @@ export default function EditionCompteScreen() {
         }
         if (compte) {
           setNom(compte.nom);
+          setNomEnregistre(compte.nom);
           setBanque(compte.banque);
         } else {
           setIntrouvable(true);
@@ -415,6 +421,7 @@ export default function EditionCompteScreen() {
     setEnregistrement(true);
     try {
       await updateCompte(compteId, nom.trim(), banque.trim());
+      setNomEnregistre(nom.trim());
       setSuccesEnregistrement(true);
     } catch {
       setErreurEnregistrement('La sauvegarde a échoué, réessayez.');
@@ -576,7 +583,7 @@ export default function EditionCompteScreen() {
 
           <PopupSuppressionCompte
             visible={popupSuppressionOuverte}
-            nomCompte={nom}
+            nomCompte={nomEnregistre}
             bloquee={compteADesDependances}
             onAnnuler={() => setPopupSuppressionOuverte(false)}
             onConfirmer={() => {
