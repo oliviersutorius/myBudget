@@ -159,6 +159,10 @@ function sommeNiveau1(
 // (ticket #12) pour être réutilisé par le pavé Variable de l'onglet
 // Dépenses (ticket #52) — même pattern visuel (styles.anneeSelectorRow/
 // anneeChevron, déjà partagés avec le sélecteur d'année de BudgetTab).
+// Les `Pressable` des chevrons portent en plus `styles.moisChevronButton`
+// (44×44, ticket #65) : contrairement au sélecteur d'année de BudgetTab
+// (hors scope #65), la zone de clic de ces chevrons-ci était trop étroite
+// (juste le glyphe, sans padding/minWidth) — confirmé en lecture de code.
 function MoisSelector({ mois, onChanger }: { mois: string; onChanger: (mois: string) => void }) {
   const [annee, moisIndex] = mois.split('-').map(Number);
 
@@ -167,6 +171,7 @@ function MoisSelector({ mois, onChanger }: { mois: string; onChanger: (mois: str
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Mois précédent"
+        style={styles.moisChevronButton}
         onPress={() => onChanger(decalerMois(mois, -1))}
       >
         <ThemedText type="title" style={styles.anneeChevron}>
@@ -179,6 +184,7 @@ function MoisSelector({ mois, onChanger }: { mois: string; onChanger: (mois: str
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Mois suivant"
+        style={styles.moisChevronButton}
         onPress={() => onChanger(decalerMois(mois, 1))}
       >
         <ThemedText type="title" style={styles.anneeChevron}>
@@ -2462,6 +2468,17 @@ const styles = StyleSheet.create({
   anneeChevron: {
     fontSize: 24,
     lineHeight: 28,
+  },
+  // Zone de clic des chevrons de `MoisSelector` (ticket #65) : 44×44, même
+  // standard que `paveAjoutButton`/`actionsMenuButton`/`niveau2AjoutButton`
+  // ci-dessus — `minWidth`/`minHeight` plutôt que `width`/`height` fixes
+  // pour ne jamais rogner le glyphe si la police système grossit
+  // (accessibilité), le centrage absorbant le surplus.
+  moisChevronButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   moisRow: {
     flexDirection: 'row',
