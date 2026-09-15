@@ -40,6 +40,7 @@ module.exports = {
     '!src/db/queries/get-montants-variable-compte.ts', // idem : requête déclarative pure (ticket #52)
     '!src/db/queries/get-montants-variable-compte-annee.ts', // idem : requête déclarative pure (ticket #13)
     '!src/db/queries/get-revenus-annee.ts', // idem : requête déclarative pure (ticket #13)
+    '!src/db/queries/get-revenus-compte.ts', // idem : requête déclarative pure (ticket #67)
     '!src/db/queries/set-montant-depense-variable.ts', // idem : upsert mince, validation testée séparément (validate-type-depense-niveau3-form.ts) (ticket #52)
     '!src/db/queries/delete-montant-depense-variable.ts', // idem : suppression mince (ticket #52)
     '!src/components/animated-icon.tsx', // timing du splash natif (SplashScreen + animation) — testé via l'e2e Maestro

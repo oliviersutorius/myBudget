@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { getCompteQuery } from '@/db/queries/get-compte';
 import { createRevenu } from '@/db/queries/create-revenu';
 import { createTypeDepenseNiveau2 } from '@/db/queries/create-type-depense-niveau2';
 import { createTypeDepenseNiveau3 } from '@/db/queries/create-type-depense-niveau3';
+import { deleteCompte } from '@/db/queries/delete-compte';
 import { deleteMontantDepenseVariable } from '@/db/queries/delete-montant-depense-variable';
 import { deleteRevenu } from '@/db/queries/delete-revenu';
 import { deleteTypeDepenseNiveau2 } from '@/db/queries/delete-type-depense-niveau2';
@@ -29,6 +30,7 @@ import { getMontantsVariableCompteQuery } from '@/db/queries/get-montants-variab
 import { getMontantsVariableCompteAnneeQuery } from '@/db/queries/get-montants-variable-compte-annee';
 import { getRevenusQuery } from '@/db/queries/get-revenus';
 import { getRevenusAnneeQuery } from '@/db/queries/get-revenus-annee';
+import { getRevenusCompteQuery } from '@/db/queries/get-revenus-compte';
 import { getTypesDepenseNiveau2Query } from '@/db/queries/get-types-depense-niveau2';
 import { getTypesDepenseNiveau3Query } from '@/db/queries/get-types-depense-niveau3';
 import {
@@ -223,10 +225,89 @@ function effacerMontantNiveau3(niveau1: Niveau1, typeDepenseNiveau3Id: number, m
     : deleteMontantDepenseVariable(typeDepenseNiveau3Id, mois);
 }
 
+// Popup de confirmation de suppression d'un compte (onglet Infos, ticket
+// #67) : locale à EditionCompteScreen plutôt que la popup partagée
+// `ConfirmationSuppressionPopup`/`demanderConfirmationSuppression` (utilisée
+// partout ailleurs pour une suppression) — celle-ci ne sait afficher qu'un
+// titre + message fixes, alors que ce cas a besoin d'un état supplémentaire
+// (bloqué/pas bloqué) qui grise le bouton « Supprimer » et affiche un
+// message d'erreur dédié. Même voile/carte que `AjoutPopup`
+// (`styles.popupOverlay`/`popupCard`), même pied Annuler/Supprimer que
+// `ConfirmationSuppressionPopup`, pour rester visuellement cohérente avec
+// les deux — maquette validée sur le canvas du ticket #67 (déclinaison B
+// pour l'état bloqué : « Supprimer » reste en `danger`, juste atténué par
+// `styles.popupSupprimerBloque`, plutôt qu'un gris neutre — reste lisible
+// comme une action destructive, seulement indisponible pour l'instant).
+function PopupSuppressionCompte({
+  visible,
+  nomCompte,
+  bloquee,
+  onAnnuler,
+  onConfirmer,
+}: {
+  visible: boolean;
+  nomCompte: string;
+  bloquee: boolean;
+  onAnnuler: () => void;
+  onConfirmer: () => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onAnnuler}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fermer la popup"
+        style={[styles.popupOverlay, { backgroundColor: PopupOverlayColor }]}
+        onPress={onAnnuler}
+      >
+        {/* onPress no-op : absorbe le tap pour ne pas fermer la popup quand
+            on touche la carte elle-même — même garde que AjoutPopup. */}
+        <Pressable
+          style={[styles.popupCard, { backgroundColor: theme.background }]}
+          onPress={() => {}}
+        >
+          <ThemedText type="smallBold">Supprimer ce compte ?</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            « {nomCompte} » sera définitivement supprimé.
+          </ThemedText>
+
+          {bloquee ? (
+            <ThemedText type="small" themeColor="danger">
+              Suppression impossible : des dépenses ou revenus sont encore rattachés à ce compte.
+            </ThemedText>
+          ) : null}
+
+          <ThemedView style={styles.popupFooter}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Annuler" onPress={onAnnuler}>
+              <ThemedText type="link">Annuler</ThemedText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Supprimer"
+              disabled={bloquee}
+              onPress={onConfirmer}
+            >
+              <ThemedText
+                type="link"
+                themeColor="danger"
+                style={bloquee ? styles.popupSupprimerBloque : undefined}
+              >
+                Supprimer
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function EditionCompteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const compteId = Number(id);
   const theme = useTheme();
+  const router = useRouter();
 
   // Chargée une seule fois ici (plutôt que dans DepensesTab et BudgetTab
   // séparément) : les deux onglets résolvent ce même historique compte-wide
@@ -248,6 +329,23 @@ export default function EditionCompteScreen() {
   );
   const aucunTypeDepense = typesNiveau2ChargeLe !== undefined && typesNiveau2.length === 0;
 
+  // Détection proactive (ticket #67) de la présence de dépendances (types
+  // niveau 2 et/ou revenus) avant même une tentative de suppression du
+  // compte — `typesNiveau2` ci-dessus suffit pour le côté niveau 2 (déjà
+  // chargé compte-wide), `revenusCompte` ne sert qu'à ce test d'existence
+  // (voir get-revenus-compte.ts, `limit(1)`). `dependancesChargees` retarde
+  // l'activation du bouton « Supprimer le compte » tant que les deux
+  // requêtes n'ont pas résolu une première fois — même garde-fou que
+  // `aucunTypeDepense` ci-dessus, pour ne jamais autoriser une suppression
+  // qui serait en réalité bloquée le temps que les données chargent.
+  const { data: revenusCompte, updatedAt: revenusCompteChargeLe } = useLiveQuery(
+    getRevenusCompteQuery(compteId),
+    [compteId],
+  );
+  const dependancesChargees =
+    typesNiveau2ChargeLe !== undefined && revenusCompteChargeLe !== undefined;
+  const compteADesDependances = typesNiveau2.length > 0 || revenusCompte.length > 0;
+
   const [chargement, setChargement] = useState(true);
   const [introuvable, setIntrouvable] = useState(false);
   const [nom, setNom] = useState('');
@@ -256,6 +354,9 @@ export default function EditionCompteScreen() {
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
   const [succesEnregistrement, setSuccesEnregistrement] = useState(false);
+  const [popupSuppressionOuverte, setPopupSuppressionOuverte] = useState(false);
+  const [suppressionCompte, setSuppressionCompte] = useState(false);
+  const [erreurSuppressionCompte, setErreurSuppressionCompte] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<Onglet>('budget');
   // Onglets Dépenses/Revenus/Budget déjà visités : une fois visité, un onglet
   // reste monté (masqué avec `display: 'none'` plutôt que démonté) pour ne
@@ -319,6 +420,28 @@ export default function EditionCompteScreen() {
       setErreurEnregistrement('La sauvegarde a échoué, réessayez.');
     } finally {
       setEnregistrement(false);
+    }
+  };
+
+  // La popup se ferme dès le tap sur « Supprimer » (avant même que
+  // `deleteCompte` ne résolve) — même choix que `demanderConfirmationSuppression`
+  // (le store ferme la popup avant d'appeler `onConfirmer`, voir
+  // use-confirmation-suppression-store.ts) : l'erreur éventuelle s'affiche
+  // alors sous le bouton, dans l'onglet Infos, plutôt que dans une popup
+  // déjà refermée.
+  const handleSupprimerCompte = async () => {
+    setErreurSuppressionCompte(null);
+    setSuppressionCompte(true);
+    try {
+      await deleteCompte(compteId);
+      router.back();
+    } catch (error) {
+      setErreurSuppressionCompte(
+        estErreurContrainteForeignKey(error)
+          ? 'Suppression impossible : des dépenses ou revenus sont encore rattachés à ce compte.'
+          : 'La suppression a échoué, réessayez.',
+      );
+      setSuppressionCompte(false);
     }
   };
 
@@ -424,8 +547,43 @@ export default function EditionCompteScreen() {
                   </ThemedText>
                 </ThemedView>
               </Pressable>
+
+              {/* Bouton à bordure danger (déclinaison B retenue sur le
+                  canvas du ticket #67) : désactivé tant que
+                  `dependancesChargees` n'a pas résolu, pour ne jamais
+                  laisser ouvrir la popup avant de savoir si la suppression
+                  serait bloquée (voir son commentaire plus haut). */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Supprimer le compte"
+                disabled={suppressionCompte || !dependancesChargees}
+                onPress={() => setPopupSuppressionOuverte(true)}
+              >
+                <ThemedView style={[styles.supprimerCompteButton, { borderColor: theme.danger }]}>
+                  <ThemedText type="smallBold" themeColor="danger">
+                    {suppressionCompte ? 'Suppression…' : 'Supprimer le compte'}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+
+              {erreurSuppressionCompte ? (
+                <ThemedText type="small" themeColor="danger">
+                  {erreurSuppressionCompte}
+                </ThemedText>
+              ) : null}
             </ThemedView>
           ) : null}
+
+          <PopupSuppressionCompte
+            visible={popupSuppressionOuverte}
+            nomCompte={nom}
+            bloquee={compteADesDependances}
+            onAnnuler={() => setPopupSuppressionOuverte(false)}
+            onConfirmer={() => {
+              setPopupSuppressionOuverte(false);
+              handleSupprimerCompte();
+            }}
+          />
 
           {ongletsVisites.has('depenses') ? (
             <ThemedView style={onglet === 'depenses' ? undefined : styles.masqueDisplayNone}>
@@ -2304,6 +2462,17 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.three,
   },
+  // Bouton « Supprimer le compte » (onglet Infos, ticket #67) : bordure
+  // danger plutôt qu'un fond plein (jamais utilisé ailleurs dans l'app pour
+  // `danger`, voir docs/design/charte-graphique.md) — `borderColor` posé en
+  // inline (`theme.danger`) au point d'usage, comme `input` ci-dessus pour
+  // ses propres couleurs dépendantes du thème.
+  supprimerCompteButton: {
+    alignItems: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1.5,
+    paddingVertical: Spacing.three - 1.5,
+  },
   section: {
     gap: Spacing.two,
   },
@@ -2458,6 +2627,13 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
+  },
+  // État bloqué de `PopupSuppressionCompte` (ticket #67, déclinaison B) :
+  // « Supprimer » reste en `danger` (pas de gris neutre) mais atténué —
+  // signale une action toujours destructive, juste indisponible pour
+  // l'instant, plutôt qu'un bouton qui semblerait désormais anodin.
+  popupSupprimerBloque: {
+    opacity: 0.45,
   },
   anneeSelectorRow: {
     flexDirection: 'row',

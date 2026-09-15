@@ -85,7 +85,19 @@ Tranche, pour la popup de confirmation (pas pour le menu « ⋮ » lui-même), l
 
 - **Structure** : même voile + carte centrée que `AjoutPopup` (fond `background`, radius `Spacing.three`), mais sans champs de formulaire — titre (`smallBold`) et message (`small`/`textSecondary`) uniquement, puis un pied Annuler/Supprimer aligné à droite.
 - **Action destructive mise en évidence** : le libellé « Supprimer » est en `danger` (`type="link" themeColor="danger"`), pas dans un bouton plein — cohérent avec l'usage de `danger` réservé à la signalisation (voir « Sémantique des couleurs d'action » ci-dessus), pas introduit comme un nouveau style de bouton plein.
-- **Usage** : identique partout où `demanderConfirmationSuppression` est appelée (types de dépense niveau 2/niveau 3, revenu, compte) — un seul appel de fonction suffit, la popup elle-même n'a pas à être montée par l'écran appelant.
+- **Usage** : `demanderConfirmationSuppression`/`ConfirmationSuppressionPopup` couvrent les suppressions à confirmation simple (types de dépense niveau 2/niveau 3, revenu) — un seul appel de fonction suffit, la popup elle-même n'a pas à être montée par l'écran appelant. La suppression d'un compte (ticket #67, voir ci-dessous) a une popup dédiée (`PopupSuppressionCompte`, locale à `comptes/[id]/edit.tsx`) : même voile/carte/pied, mais avec un état bloqué que ce composant partagé ne sait pas représenter.
+
+## Bouton à bordure (action secondaire hors formulaire)
+
+Introduit par le ticket #67 pour « Supprimer le compte » (onglet Infos, sous « Enregistrer ») : premier bouton `danger` de l'app qui ne soit ni un libellé de lien (voir ci-dessus) ni un bouton plein `backgroundElement` comme `submitButton` — une bordure `danger` (1,5px, `borderRadius: Spacing.two`), fond transparent, libellé `smallBold themeColor="danger"` centré. Position tranchée sur un canvas de 3 déclinaisons (lien renforcé sans fond / bordure / plein `danger`) : la bordure a été retenue comme le point intermédiaire — plus affirmé qu'un simple lien pour une action qui reste rare et volontaire, sans aller jusqu'à un bouton plein `danger` (jugé trop proche visuellement d'une action encouragée, à l'opposé de l'intention).
+
+## État bloqué d'une action destructive
+
+Introduit par `PopupSuppressionCompte` (ticket #67, voir « Popup de confirmation de suppression » ci-dessus) pour le cas où la suppression d'un compte est bloquée par des dépenses/revenus encore rattachés — détecté **proactivement** (avant tentative, pas seulement en cas d'échec de la contrainte de clé étrangère SQLite) :
+
+- Message d'erreur (`small`/`danger`) inséré dans la carte, entre le message de confirmation normal et le pied Annuler/Supprimer — pas de nouveau bloc visuel (fond, bordure) dédié.
+- Le bouton « Supprimer » reste **visible et de la même couleur** `danger`, mais à `opacity: 0.45` (`disabled` sur le `Pressable`) — signale une action toujours destructive, seulement indisponible pour l'instant, plutôt qu'un gris neutre qui la ferait paraître anodine.
+- Déclinaison retenue parmi 3 proposées sur le même canvas que le bouton à bordure ci-dessus (message + bouton neutre / message + bouton atténué / message en bloc `backgroundSelected`).
 
 ## Espacements
 

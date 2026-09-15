@@ -37,10 +37,10 @@ appId: com.mybudget.app
 - tapOn: 'Valider la création du compte'
 - assertVisible: 'Compte Test'
 
-# --- Ouverture du compte (menu « ⋮ » → Modifier, pas de tap direct sur la
-# ligne) : identifiant de compte inconnu à l'avance, d'où le motif regex. ---
-- tapOn: '.*Actions pour le compte Compte Test.*'
-- tapOn: 'Modifier'
+# --- Ouverture du compte : tap sur la ligne entière, plus de menu « ⋮ »
+# (ticket #67) — ouvre directement sur l'onglet Budget (onglet par défaut de
+# EditionCompteScreen, ticket #34). ---
+- tapOn: 'Voir le compte Compte Test'
 - assertVisible: 'Compte Test'
 
 # --- Onglet Dépenses : type niveau 2 « Loyer » (Fixe) ---
@@ -111,3 +111,40 @@ appId: com.mybudget.app
 - assertVisible: 'Loyer appartement'
 - assertVisible: 'Salaire'
 - assertVisible: '.*800,00.*'
+
+# --- Onglet Infos : suppression bloquée (ticket #67) — « Compte Test »
+# porte encore le type de dépense « Loyer » et le revenu « Salaire » ajoutés
+# plus haut, la suppression doit donc être bloquée proactivement, avant même
+# la tentative (pas seulement révélée après échec, voir la contrainte de clé
+# étrangère de delete-compte.ts). Le bouton « Supprimer » de la popup reste
+# visible mais désactivé : le tap sur « Annuler » (pas sur « Supprimer »,
+# qui ne ferait rien) referme la popup. ---
+- tapOn: 'Onglet Infos'
+- tapOn: 'Supprimer le compte'
+- assertVisible: '.*Suppression impossible.*'
+- tapOn: 'Annuler'
+- assertNotVisible: '.*Suppression impossible.*'
+
+# --- Second compte, sans aucune dépense/revenu rattaché : suppression
+# réussie, retour automatique à la page d'accueil (router.back(), pas
+# d'action utilisateur supplémentaire) et disparition de la liste. `- back`
+# (bouton système Android) plutôt qu'un bouton "Retour" dans l'app : l'écran
+# compte n'a pas de header (`headerShown: false`, src/app/_layout.tsx),
+# navigation retour uniquement via le geste/bouton natif. ---
+- back
+- tapOn: 'Ajouter un compte'
+- tapOn: 'Nom du compte'
+- inputText: 'Compte À Supprimer'
+- tapOn: 'Banque du compte'
+- inputText: 'Banque Test'
+- hideKeyboard
+- tapOn: 'Valider la création du compte'
+- assertVisible: 'Compte À Supprimer'
+- tapOn: 'Voir le compte Compte À Supprimer'
+- tapOn: 'Onglet Infos'
+- tapOn: 'Supprimer le compte'
+- assertNotVisible: '.*Suppression impossible.*'
+- tapOn: 'Supprimer'
+- assertVisible: 'Mes comptes'
+- assertNotVisible: 'Compte À Supprimer'
+- assertVisible: 'Compte Test'
