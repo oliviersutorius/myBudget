@@ -24,6 +24,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Demande de la permission de notifications à la création du premier compte, une seule fois (pas de redemande à chaque lancement une fois la décision de l'utilisateur prise) — prépare le rappel du 1er du mois (#14), sans qu'aucune fonctionnalité actuelle n'en dépende (#19).
 - Rappel local (100% hors connexion) le 1er de chaque mois à 9h, invitant à saisir ses revenus du mois — tap sur la notification → ouverture de l'accueil (liste des comptes), sans favoriser un compte plutôt qu'un autre (#14).
 - Scénario e2e Maestro du parcours principal (`e2e/parcours-principal.yaml`) : création d'un compte → type de dépense niveau 2 (Fixe) + ligne niveau 3 avec un montant → ajout d'un revenu sur le mois courant → vérification du montant disponible affiché dans l'onglet Budget (#22).
+- Onglet Budget : masque les mois entièrement futurs de la liste et ajoute un récapitulatif détaillé du mois sélectionné (cartes niveau 1/niveau 2 collapsables, montant disponible en hero) (#63).
 
 ### Fixed
 
@@ -45,6 +46,8 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Sur une ligne de type de dépense niveau 3, « Modifier » reste accessible pendant qu'un montant est en cours d'enregistrement ; « Marquer absente »/« Supprimer » ne peuvent plus se déclencher pendant qu'un enregistrement est déjà en cours sur la même ligne.
 - CI : le job Tests e2e (Maestro) démarre désormais un émulateur Android (build natif via `expo prebuild` + Gradle) avant d'exécuter les flows, au lieu d'échouer systématiquement faute de device connecté (#43).
 - App entière plantant au démarrage sous Expo Go (`expo-notifications: ... was removed from Expo Go with the release of SDK 53`) depuis l'ajout de la dépendance par #19 : l'import du module est désormais différé et ne s'exécute jamais dans Expo Go (`src/utils/notifications-module.ts`) — les fonctionnalités de notifications y deviennent des no-op silencieux plutôt que de faire planter tous les écrans, `expo-notifications` restant pleinement fonctionnel hors Expo Go (dev client, build de production).
+- Dépenses : zone de clic verticale du chevron/libellé d'un type niveau 2 élargie (le tap replier/déplier ne fonctionnait que sur une fine bande autour du texte) ; fond des pavés niveau 1 harmonisé avec celui de l'onglet Budget (#64).
+- Revenus et pavé Variable de l'onglet Dépenses : zone de clic des chevrons `‹`/`›` du sélecteur de mois élargie à 44×44, cohérente avec le reste de l'app (#65).
 
 ### Changed
 
