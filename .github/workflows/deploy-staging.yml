@@ -4,8 +4,8 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  build-and-submit-preview:
-    name: Build & distribution (preview)
+  build-preview:
+    name: Build (preview)
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -19,5 +19,4 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      - run: eas build --profile preview --platform all --non-interactive
-      - run: eas submit --profile preview --platform all --non-interactive
+      - run: eas build --profile preview --platform android --non-interactive
