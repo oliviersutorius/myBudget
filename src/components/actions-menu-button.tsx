@@ -95,64 +95,78 @@ export function ActionsMenuButton({
         <KebabIcon color={theme.text} />
       </Pressable>
 
-      <Modal visible={ouvert} transparent animationType="fade" onRequestClose={fermer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Fermer le menu"
-          style={[styles.overlay, { backgroundColor: PopupOverlayColor }]}
-          onPress={fermer}
-        >
-          {/* onPress no-op : absorbe le tap pour ne pas fermer le menu quand
-              on touche la carte elle-même — même garde que AjoutPopup/
-              ConfirmationSuppressionPopup. */}
+      {/* Monté seulement à l'ouverture (pas `<Modal visible={ouvert}>` monté
+          en permanence) : chaque ligne niveau 2/niveau 3/revenu porte son
+          propre `ActionsMenuButton` — sur une longue liste, garder un
+          `Modal` natif caché par ligne serait un coût superflu pour un menu
+          fermé la plupart du temps (review N1 de #66). */}
+      {ouvert ? (
+        <Modal transparent animationType="fade" onRequestClose={fermer}>
           <Pressable
-            testID="actions-menu-sheet"
-            style={[styles.sheet, { paddingBottom: Spacing.two + insets.bottom }]}
-            onPress={() => {}}
+            accessibilityRole="button"
+            accessibilityLabel="Fermer le menu"
+            style={[styles.overlay, { backgroundColor: PopupOverlayColor }]}
+            onPress={fermer}
           >
-            <ThemedView style={[styles.card, { backgroundColor: theme.background }]}>
-              <ThemedView style={styles.cardHeader}>
-                <ThemedText type="smallBold">{title}</ThemedText>
-                {message ? (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {message}
-                  </ThemedText>
-                ) : null}
-              </ThemedView>
-              <ThemedView style={[styles.divider, { backgroundColor: theme.backgroundSelected }]} />
-
-              {actions.map((action, index) => (
-                <Fragment key={action.label}>
-                  {index > 0 ? (
-                    <ThemedView
-                      style={[styles.divider, { backgroundColor: theme.backgroundSelected }]}
-                    />
-                  ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={action.label}
-                    onPress={() => choisir(action)}
-                    style={styles.actionRow}
-                  >
-                    <ThemedText themeColor={action.destructive ? 'danger' : 'text'}>
-                      {action.label}
-                    </ThemedText>
-                  </Pressable>
-                </Fragment>
-              ))}
-            </ThemedView>
-
+            {/* onPress no-op : absorbe le tap pour ne pas fermer le menu
+                quand on touche la carte elle-même — même garde que
+                AjoutPopup/ConfirmationSuppressionPopup. */}
             <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Annuler"
-              onPress={fermer}
-              style={[styles.card, styles.cancelCard, { backgroundColor: theme.background }]}
+              testID="actions-menu-sheet"
+              style={[styles.sheet, { paddingBottom: Spacing.two + insets.bottom }]}
+              onPress={() => {}}
             >
-              <ThemedText>Annuler</ThemedText>
+              <ThemedView style={[styles.card, { backgroundColor: theme.background }]}>
+                <ThemedView style={styles.cardHeader}>
+                  <ThemedText type="smallBold">{title}</ThemedText>
+                  {message ? (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {message}
+                    </ThemedText>
+                  ) : null}
+                </ThemedView>
+                <ThemedView
+                  style={[styles.divider, { backgroundColor: theme.backgroundSelected }]}
+                />
+
+                {actions.map((action, index) => (
+                  // `index`, pas `action.label` : `actions` est reconstruit
+                  // à l'identique à chaque rendu par l'appelant (pas de
+                  // réordonnancement/insertion à suivre) — un libellé
+                  // pourrait en théorie se répéter (review N1 de #66),
+                  // l'index reste stable et sans collision possible ici.
+                  <Fragment key={index}>
+                    {index > 0 ? (
+                      <ThemedView
+                        style={[styles.divider, { backgroundColor: theme.backgroundSelected }]}
+                      />
+                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={action.label}
+                      onPress={() => choisir(action)}
+                      style={styles.actionRow}
+                    >
+                      <ThemedText themeColor={action.destructive ? 'danger' : 'text'}>
+                        {action.label}
+                      </ThemedText>
+                    </Pressable>
+                  </Fragment>
+                ))}
+              </ThemedView>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Annuler"
+                onPress={fermer}
+                style={[styles.card, styles.cancelCard, { backgroundColor: theme.background }]}
+              >
+                <ThemedText>Annuler</ThemedText>
+              </Pressable>
             </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      ) : null}
     </>
   );
 }
