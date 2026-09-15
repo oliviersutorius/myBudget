@@ -18,7 +18,7 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Page compte réorganisée en 4 onglets : Infos, Dépenses, Revenus, Budget.
 - Onglet Revenus : ajout d'un revenu sur un mois donné, navigation mois par mois, modification et suppression d'un revenu (#12).
 - Types de dépenses niveau 3 : saisie et historisation du montant par mois, avec action « Marquer absente » pour un mois sans dépense (#9).
-- Suppression d'un compte depuis la page d'accueil (menu « ⋮ » Modifier/Supprimer, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16).
+- Suppression d'un compte (onglet Infos, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16, déplacée de la page d'accueil vers l'onglet Infos par #67, voir « Changed »).
 - Onglet Budget : calcul et affichage du montant disponible du mois (revenus - dépenses fixe et variable), sur la ligne récapitulative de chaque mois et sur le détail d'un mois — jamais agrégé entre comptes (#13).
 - Onglet Budget : bandeau d'incitation à définir des types de dépense, affiché au-dessus de la liste des mois tant qu'aucun n'existe pour le compte — évite la confusion entre « compte pas encore configuré » et « budget réellement nul » (#20).
 - Demande de la permission de notifications à la création du premier compte, une seule fois (pas de redemande à chaque lancement une fois la décision de l'utilisateur prise) — prépare le rappel du 1er du mois (#14), sans qu'aucune fonctionnalité actuelle n'en dépende (#19).
@@ -56,3 +56,4 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Actions « Modifier »/« Supprimer » des types de dépenses (niveaux 2 et 3) harmonisées sur le même menu « ⋮ » que l'onglet Revenus, à la place des liens texte précédents (#26).
 - Menu d'actions « ⋮ » extrait de la page compte vers un composant partagé (`src/components/actions-menu-button.tsx`), désormais réutilisé par la liste des comptes ; couvert par un test unitaire (#16).
 - Popup de confirmation de suppression : remplace le `Alert.alert` natif par une popup maison cohérente avec le reste de l'app (`ConfirmationSuppressionPopup`), le menu « ⋮ » lui-même restant natif pour l'instant (#45).
+- Page d'accueil : le menu « ⋮ » Modifier/Supprimer des lignes de compte disparaît — un tap n'importe où sur la ligne ouvre directement la page du compte (onglet Budget) ; la suppression migre dans l'onglet Infos (bouton « Supprimer le compte », popup dédiée dont le bouton « Supprimer » reste visible mais atténué, avec un message explicite, quand la suppression est bloquée) (#67).
