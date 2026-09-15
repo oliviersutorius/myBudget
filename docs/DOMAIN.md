@@ -128,7 +128,7 @@ Entités détaillées (attributs complets, contraintes de validation, schéma Dr
 
 - **Performance perçue** : l'application doit être très fluide, avec un accès quasi instantané au budget du mois.
 - **Offline** : l'application fonctionne intégralement hors connexion (cohérent avec le stockage 100% local).
-- **Rétention / archivage** : purge de l'historique au bout de X années — la valeur de X reste **à définir**.
+- **Rétention / archivage** : **pas de purge automatique, conservation illimitée de l'historique** (décision produit, ticket #21).
 - **Traçabilité / audit** : pas de besoin de traçabilité ou d'historique des modifications (ex : pas de suivi des changements sur une dépense).
 
 ## 7. Glossaire condensé
