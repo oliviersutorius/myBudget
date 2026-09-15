@@ -54,5 +54,5 @@ Détail de chaque agent : voir `docs/AGENTS.md`.
 
 ## Déploiement (manuel)
 
-- **Staging/preview** : déclenché manuellement via le workflow GitHub Actions `deploy-staging.yml` (`workflow_dispatch`), build EAS profile `preview`, distribution interne (TestFlight / build interne Android).
+- **Staging/preview** : déclenché manuellement via le workflow GitHub Actions `deploy-staging.yml` (`workflow_dispatch`), build EAS profile `preview` (APK Android, `--platform android`) — pas de soumission store à ce stade, l'APK se télécharge directement depuis le build EAS (dashboard expo.dev ou lien affiché dans les logs) pour installation manuelle sur device de test.
 - **Production** : déclenché manuellement via `deploy-production.yml` (`workflow_dispatch`), protégé par l'environnement GitHub `production` (approbation humaine obligatoire avant exécution), soumission App Store + Google Play via EAS Submit.
