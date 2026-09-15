@@ -8,6 +8,8 @@ jobs:
     name: Build (preview)
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -10,6 +10,8 @@ jobs:
     # L'environnement "production" doit être configuré dans Settings > Environments
     # avec une règle de protection "Required reviewers" (approbation humaine obligatoire).
     environment: production
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
