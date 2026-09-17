@@ -129,6 +129,15 @@ jobs:
       # n'est prévue dans l'action elle-même. Wandalen/wretry.action ré-
       # essaie les étapes pre/main/post de l'action encapsulée (ici surtout
       # la « pre », là où l'échec est constaté) en cas de flake réseau.
+      #
+      # `profile: Nexus 5X` plutôt que `pixel_6` : sur le runner CI partagé
+      # (peu de CPU/RAM face à un émulateur + build Gradle simultanés), le
+      # profil pixel_6 (plus haute résolution/spec) a provoqué un ANR du
+      # Pixel Launcher lui-même (« Pixel Launcher isn't responding »),
+      # constaté en plein milieu du rendu de l'app (« Mes comptes » bien
+      # affiché derrière le dialogue système) — donc un problème de charge
+      # de l'émulateur, pas un bug de l'app. Nexus 5X est le profil plus
+      # léger classiquement recommandé pour ce type de flake en CI.
       - name: Démarrer l'émulateur Android et lancer les flows Maestro
         uses: Wandalen/wretry.action@v3.8.0
         with:
@@ -139,7 +148,7 @@ jobs:
             api-level: 34
             target: google_apis
             arch: x86_64
-            profile: pixel_6
+            profile: Nexus 5X
             disable-animations: true
             emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
             script: |
