@@ -87,6 +87,14 @@ appId: com.mybudget.app
 - assertVisible: 'Déplier le pavé Fixe'
 - assertNotVisible: 'Loyer appartement'
 
+# --- Onglet Budget (ticket #80) : aucun revenu enregistré à ce stade (seul
+# le type de dépense « Loyer » a été ajouté ci-dessus, aucun revenu créé
+# encore) — la vue liste des mois doit donc être vide, avec un état
+# explicite plutôt qu'une liste blanche silencieuse. ---
+- tapOn: 'Onglet Budget'
+- assertVisible: '.*Aucun revenu enregistré pour.*'
+- assertNotVisible: '.*Voir le détail de.*'
+
 # --- Onglet Revenus : revenu sur le mois courant (sélecteur de mois déjà
 # positionné dessus par défaut, aucune navigation de mois nécessaire) ---
 - tapOn: 'Onglet Revenus'
@@ -102,14 +110,17 @@ appId: com.mybudget.app
 # --- Onglet Budget : montant disponible du mois courant = 2000 - 1200 =
 # 800,00 € (regex plutôt qu'un texte littéral : le séparateur inséré par
 # Intl.NumberFormat avant « € » est une espace insécable U+00A0, pas une
-# espace classique — voir src/utils/montant.ts) ---
+# espace classique — voir src/utils/montant.ts). Le revenu « Salaire » venant
+# d'être ajouté, le mois courant redevient visible dans la liste (ticket
+# #80) : l'état vide constaté plus haut n'était donc pas permanent. ---
 - tapOn: 'Onglet Budget'
 - assertVisible: '.*800,00.*'
 
 # --- Détail du mois courant (ticket #63) : le récapitulatif doit lister la
 # ligne niveau 3 et le revenu ajoutés plus haut, plus le montant disponible
 # en hero. Le mois courant est toujours la première ligne de la liste (les
-# mois futurs sont masqués depuis #63) : `index: 0` lève l'ambiguïté du
+# mois futurs sont masqués depuis #63, et c'est désormais le seul mois de
+# l'année à avoir un revenu — ticket #80) : `index: 0` lève l'ambiguïté du
 # sélecteur regex plutôt que de recalculer le libellé du mois courant en
 # YAML. ---
 - tapOn:
