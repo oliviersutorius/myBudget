@@ -63,7 +63,21 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # `packages: platform-tools` (sans le `tools` par défaut de l'action,
+      # voir `packages: tools platform-tools` dans android-actions/setup-android
+      # action.yml) : le paquet SDK legacy `tools` (outils historiques
+      # `android`/`emulator`/`monitor`, dépréciés depuis 2021) a été retiré du
+      # dépôt Google — `sdkmanager tools` échoue désormais avec `Failed to
+      # find package 'tools'`, faisant échouer toute l'action (exit code 1)
+      # avant même d'atteindre le prebuild/build ci-dessous. Seul
+      # `platform-tools` (adb, utilisé plus bas par `adb install`/`logcat`/
+      # `exec-out`) est réellement nécessaire ici : `build-tools`/`platforms`
+      # manquants pour ce projet sont de toute façon auto-téléchargés par le
+      # plugin Gradle Android pendant `assembleRelease`, les licences étant
+      # déjà acceptées (`accept-android-sdk-licenses`, défaut de l'action).
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       # Workflow managé (pas de dossier android/ versionné, voir .gitignore) :
       # régénéré ici, jetable après le job. Le package `com.mybudget.app`
       # (app.json) doit rester cohérent avec `appId` dans e2e/*.yaml.
