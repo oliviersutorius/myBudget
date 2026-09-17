@@ -2216,8 +2216,19 @@ function BudgetTab({
   // fois, pas jusqu'à 12 fois par rendu — review N1 de #63), et sous forme
   // de données (tableau de mois à afficher) plutôt qu'un filtrage au niveau
   // du JSX (`return null` dans le `.map()`).
+  //
+  // Ticket #80 : un mois sans aucun revenu enregistré est exclu de cette
+  // liste, en plus du masquage des mois futurs ci-dessus — les deux filtres
+  // se cumulent (indépendants l'un de l'autre). `revenusParMois` est déjà
+  // chargé/groupé plus haut par BudgetTab, aucune nouvelle requête. Ne
+  // concerne que cette vue liste : ni le sélecteur de mois de l'onglet
+  // Revenus, ni le pavé Variable de l'onglet Dépenses (`MoisSelector`), qui
+  // doivent au contraire rester navigables vers un mois sans revenu pour y
+  // en saisir un premier.
   const moisMaxAffiche = annee === anneeCourante ? new Date().getMonth() + 1 : 12;
-  const moisAffiches = Array.from({ length: moisMaxAffiche }, (_, i) => moisMaxAffiche - i);
+  const moisAffiches = Array.from({ length: moisMaxAffiche }, (_, i) => moisMaxAffiche - i).filter(
+    (mois) => (revenusParMois.get(`${annee}-${String(mois).padStart(2, '0')}`)?.length ?? 0) > 0,
+  );
 
   return (
     <ThemedView style={styles.section}>
@@ -2257,30 +2268,41 @@ function BudgetTab({
         </Pressable>
       </ThemedView>
 
-      <ThemedView style={styles.typesList}>
-        {moisAffiches.map((mois) => {
-          const disponible = disponiblesParMois.get(mois) ?? 0;
-          return (
-            <Pressable
-              key={mois}
-              accessibilityRole="button"
-              accessibilityLabel={`Voir le détail de ${MOIS_LIBELLES[mois - 1]} ${annee}`}
-              onPress={() => setMoisSelectionne(mois)}
-            >
-              <ThemedView type="backgroundElement" style={styles.moisRow}>
-                <ThemedText type="small">{MOIS_LIBELLES[mois - 1]}</ThemedText>
-                <ThemedText
-                  type="small"
-                  themeColor={disponible < 0 ? 'danger' : 'textSecondary'}
-                  style={styles.tabularNums}
-                >
-                  {formatCentimesEnEuros(disponible)}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          );
-        })}
-      </ThemedView>
+      {/* Ticket #80 : état vide explicite plutôt qu'une liste blanche
+          silencieuse quand aucun mois de l'année affichée n'a de revenu
+          (tous filtrés par `moisAffiches` ci-dessus) — même registre que
+          les autres états vides de l'app (ex. `Niveau1Pave`, « Aucun type
+          « {titre} » pour l'instant. »). */}
+      {moisAffiches.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Aucun revenu enregistré pour {annee}.
+        </ThemedText>
+      ) : (
+        <ThemedView style={styles.typesList}>
+          {moisAffiches.map((mois) => {
+            const disponible = disponiblesParMois.get(mois) ?? 0;
+            return (
+              <Pressable
+                key={mois}
+                accessibilityRole="button"
+                accessibilityLabel={`Voir le détail de ${MOIS_LIBELLES[mois - 1]} ${annee}`}
+                onPress={() => setMoisSelectionne(mois)}
+              >
+                <ThemedView type="backgroundElement" style={styles.moisRow}>
+                  <ThemedText type="small">{MOIS_LIBELLES[mois - 1]}</ThemedText>
+                  <ThemedText
+                    type="small"
+                    themeColor={disponible < 0 ? 'danger' : 'textSecondary'}
+                    style={styles.tabularNums}
+                  >
+                    {formatCentimesEnEuros(disponible)}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            );
+          })}
+        </ThemedView>
+      )}
     </ThemedView>
   );
 }
