@@ -478,7 +478,24 @@ export default function EditionCompteScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedText type="title">{nom}</ThemedText>
+          {/* En-tête banque + nom du compte (ticket #79, maquette B — Une
+              ligne, alignement baseline) : la banque est mise en avant
+              (`subtitle`, 32px/600, `primary`) au-dessus du nom du compte
+              (`default`, 16px/500, `textSecondary`) — inversion de la
+              hiérarchie visuelle précédente, où seul le nom (`title`, 48px)
+              était affiché. `flexWrap: 'wrap'` (styles.enteteRow) gère le
+              repli sur plusieurs lignes pour un nom de banque long. */}
+          <ThemedView style={styles.enteteRow}>
+            <ThemedText type="subtitle" themeColor="primary">
+              {banque}
+            </ThemedText>
+            <ThemedText type="default" themeColor="textSecondary" style={styles.enteteSeparateur}>
+              –
+            </ThemedText>
+            <ThemedText type="default" themeColor="textSecondary">
+              {nom}
+            </ThemedText>
+          </ThemedView>
 
           <BarreOnglets actif={onglet} onChanger={changerOnglet} />
 
@@ -2498,6 +2515,22 @@ function RecapLignesMontants({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // En-tête banque + nom du compte (ticket #79, maquette B) : alignement sur
+  // la ligne de base plutôt que sur le centre — la banque (`subtitle`,
+  // lh 44) et le nom (`default`, lh 24) n'ont pas la même hauteur de ligne,
+  // `baseline` évite qu'ils paraissent désaxés l'un par rapport à l'autre.
+  enteteRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    columnGap: 10,
+  },
+  // Taille intermédiaire entre la banque (32px) et le nom (16px) — pas de
+  // token `ThemedText` existant à ce palier, valeur posée en inline comme
+  // `input`/`supprimerCompteButton` ci-dessous pour la même raison.
+  enteteSeparateur: {
+    fontSize: 20,
   },
   masqueDisplayNone: {
     display: 'none',
