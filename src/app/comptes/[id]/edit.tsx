@@ -598,6 +598,7 @@ export default function EditionCompteScreen() {
                 compteId={compteId}
                 historiqueCompte={historiqueCompte}
                 types={typesNiveau2}
+                actif={onglet === 'depenses'}
               />
             </ThemedView>
           ) : null}
@@ -614,6 +615,7 @@ export default function EditionCompteScreen() {
                 types={typesNiveau2}
                 aucunTypeDepense={aucunTypeDepense}
                 onAllerVersDepenses={() => changerOnglet('depenses')}
+                actif={onglet === 'budget'}
               />
             </ThemedView>
           ) : null}
@@ -762,6 +764,7 @@ function DepensesTab({
   compteId,
   historiqueCompte,
   types,
+  actif,
 }: {
   compteId: number;
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
@@ -775,6 +778,12 @@ function DepensesTab({
   // (ticket #20), la souscrire deux fois doublerait les lectures/écoutes
   // sur cette table sans raison.
   types: TypeDepenseNiveau2[];
+  // Vrai quand cet onglet est l'onglet actif (ticket #78) : ce composant
+  // reste monté en permanence une fois visité (masqué via `display:none`
+  // par EditionCompteScreen, jamais démonté), donc c'est ce booléen — pas
+  // le montage — qui signale une « arrivée » sur l'onglet pour refermer les
+  // pavés Fixe/Variable, voir Niveau1Pave.
+  actif: boolean;
 }) {
   // Fixe : reconduit automatiquement, toujours affiché au mois courant, pas
   // de sélecteur de mois (voir ticket #52 — inchangé par rapport à #9).
@@ -810,6 +819,7 @@ function DepensesTab({
         montantsParType3={montantsFixe}
         sommeParNiveau2={sommeFixe}
         mois={moisFixe}
+        actif={actif}
       />
 
       <MoisSelector mois={moisVariable} onChanger={setMoisVariable} />
@@ -831,16 +841,17 @@ function DepensesTab({
         montantsParType3={montantsVariable}
         sommeParNiveau2={sommeVariable}
         mois={moisVariable}
+        actif={actif}
       />
     </ThemedView>
   );
 }
 
 // Pavé niveau 1 (Fixe/Variable), maquette « A — Compact » (ticket #41) : non
-// éditable, collapsable en cliquant sur le libellé (ouvert par défaut — le
-// plus proche du comportement de l'écran précédent, où les types niveau 2
-// étaient toujours visibles), somme + bouton « + » (popup 1 champ Nom)
-// toujours affichés sur l'en-tête, y compris replié.
+// éditable, collapsable en cliquant sur le libellé — fermé à chaque arrivée
+// sur l'onglet Dépenses (ticket #78, revient sur le choix initial « ouvert
+// par défaut » de #41), somme + bouton « + » (popup 1 champ Nom) toujours
+// affichés sur l'en-tête, y compris replié.
 function Niveau1Pave({
   compteId,
   niveau1,
@@ -850,6 +861,7 @@ function Niveau1Pave({
   montantsParType3,
   sommeParNiveau2,
   mois,
+  actif,
 }: {
   compteId: number;
   niveau1: Niveau1;
@@ -861,14 +873,34 @@ function Niveau1Pave({
   /** Mois dont dépendent les montants affichés/saisis sous ce pavé — mois
    * courant (fixe) ou mois sélectionné (variable), voir DepensesTab. */
   mois: string;
+  /** Vrai quand l'onglet Dépenses est actif (ticket #78) — voir DepensesTab. */
+  actif: boolean;
 }) {
   const theme = useTheme();
-  const [ouvert, setOuvert] = useState(true);
+  const [ouvert, setOuvert] = useState(false);
   const [popupOuvert, setPopupOuvert] = useState(false);
   const [libelle, setLibelle] = useState('');
   const [errors, setErrors] = useState<TypeDepenseNiveau2FormErrors>({});
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+
+  // Referme le pavé à chaque activation de l'onglet Dépenses (ticket #78) —
+  // pas seulement au montage : ce composant reste monté en permanence une
+  // fois l'onglet visité une première fois (masqué via `display:none` par
+  // EditionCompteScreen), donc un simple défaut `useState` ne se
+  // réappliquerait pas lors d'un retour sur l'onglet après l'avoir quitté.
+  // Fermer ce pavé démonte aussi ses lignes niveau 2 (`{ouvert ? ... : null}`
+  // ci-dessous), ce qui les reréinitialise déjà repliées. Ajustement pendant
+  // le rendu (plutôt qu'un `useEffect`, qui déclencherait un rendu en cascade
+  // évitable — voir la règle `react-hooks/set-state-in-effect`) : pattern
+  // React recommandé pour réinitialiser un état au changement d'une prop.
+  const [actifPrecedent, setActifPrecedent] = useState(actif);
+  if (actif !== actifPrecedent) {
+    setActifPrecedent(actif);
+    if (actif) {
+      setOuvert(false);
+    }
+  }
 
   const fermerPopup = () => {
     setPopupOuvert(false);
@@ -1981,6 +2013,7 @@ function BudgetTab({
   types,
   aucunTypeDepense,
   onAllerVersDepenses,
+  actif,
 }: {
   compteId: number;
   // Historique compte-wide de tous les montants de dépense fixe (chargé par
@@ -2003,6 +2036,8 @@ function BudgetTab({
   // ci-dessus) — géré par le parent (EditionCompteScreen) plutôt que par
   // ce composant, qui n'a pas connaissance des autres onglets.
   onAllerVersDepenses: () => void;
+  /** Vrai quand l'onglet Budget est actif (ticket #78) — voir RecapNiveau1Card. */
+  actif: boolean;
 }) {
   const anneeCourante = new Date().getFullYear();
   const [annee, setAnnee] = useState(anneeCourante);
@@ -2129,12 +2164,14 @@ function BudgetTab({
               types={typesFixe}
               montantsParType3={recapFixe.montantsParType3}
               sommeParNiveau2={recapFixe.sommeParNiveau2}
+              actif={actif}
             />
             <RecapNiveau1Card
               titre={LIBELLE_NIVEAU1.variable}
               types={typesVariable}
               montantsParType3={recapVariable.montantsParType3}
               sommeParNiveau2={recapVariable.sommeParNiveau2}
+              actif={actif}
             />
           </>
         )}
@@ -2237,24 +2274,41 @@ function BudgetTab({
 // (#41) : mêmes tokens plutôt qu'un nouveau style de carte, cohérent avec le
 // choix déjà documenté pour ce ticket (voir commentaire au-dessus de
 // BudgetTab). Collapsable en cliquant sur le chevron/libellé — même
-// comportement que `Niveau1Pave` (Dépenses), ouvert par défaut, à la
-// demande du développeur après validation du reste de l'écran (pas dans la
-// spec figée initiale du ticket) ; sans bouton « + », toujours en lecture
-// seule.
+// comportement que `Niveau1Pave` (Dépenses), fermée à chaque arrivée sur
+// l'onglet Budget (ticket #78, revient sur le choix « ouverte par défaut »
+// pris après #63) ; sans bouton « + », toujours en lecture seule.
 function RecapNiveau1Card({
   titre,
   types,
   montantsParType3,
   sommeParNiveau2,
+  actif,
 }: {
   titre: string;
   types: TypeDepenseNiveau2[];
   montantsParType3: MontantsParType3;
   sommeParNiveau2: Map<number, number>;
+  /** Vrai quand l'onglet Budget est actif (ticket #78) — voir DepensesTab
+   * (Niveau1Pave) pour la raison de ce mécanisme plutôt qu'un défaut
+   * `useState`. */
+  actif: boolean;
 }) {
   const theme = useTheme();
-  const [ouvert, setOuvert] = useState(true);
+  const [ouvert, setOuvert] = useState(false);
   const total = sommeNiveau1(types, sommeParNiveau2);
+
+  // Voir le commentaire équivalent dans Niveau1Pave (ticket #78) : ce
+  // composant reste monté en permanence une fois le mois sélectionné, un
+  // simple défaut `useState` ne suffit donc pas à refermer la carte à
+  // chaque retour sur l'onglet Budget. Ajustement pendant le rendu (pas de
+  // `useEffect`, voir le commentaire équivalent dans Niveau1Pave).
+  const [actifPrecedent, setActifPrecedent] = useState(actif);
+  if (actif !== actifPrecedent) {
+    setActifPrecedent(actif);
+    if (actif) {
+      setOuvert(false);
+    }
+  }
 
   // Pas de carte pour un niveau 1 sans aucun type de dépense défini, ou dont
   // aucun type n'a de montant enregistré ce mois-ci (review N1 de #63) :

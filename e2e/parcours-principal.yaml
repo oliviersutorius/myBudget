@@ -75,6 +75,18 @@ appId: com.mybudget.app
 - tapOn: '.*(Replier|Déplier) le type de dépense Loyer.*'
 - assertVisible: 'Loyer appartement'
 
+# --- Ticket #78 : le pavé niveau 1 « Fixe » doit se refermer automatiquement
+# à chaque retour sur l'onglet Dépenses — pas seulement au premier montage
+# (l'écran reste monté en permanence une fois l'onglet visité, voir le
+# commentaire de Niveau1Pave). Un aller-retour via l'onglet Revenus suffit à
+# le vérifier : le pavé, resté ouvert depuis l'ajout de « Loyer » ci-dessus,
+# doit apparaître refermé (« Déplier le pavé Fixe ») au retour, ce qui rend
+# aussi sa ligne niveau 2 « Loyer appartement » invisible. ---
+- tapOn: 'Onglet Revenus'
+- tapOn: 'Onglet Dépenses'
+- assertVisible: 'Déplier le pavé Fixe'
+- assertNotVisible: 'Loyer appartement'
+
 # --- Onglet Revenus : revenu sur le mois courant (sélecteur de mois déjà
 # positionné dessus par défaut, aucune navigation de mois nécessaire) ---
 - tapOn: 'Onglet Revenus'
@@ -103,14 +115,26 @@ appId: com.mybudget.app
 - tapOn:
     text: '.*Voir le détail de.*'
     index: 0
-# Le groupe niveau 2 « Loyer » est replié par défaut (même comportement que
-# Niveau2Ligne côté Dépenses, ajouté après la première maquette du ticket
-# #63) : il faut le déplier pour voir la ligne niveau 3 « Loyer
+# La carte niveau 1 « Fixe » est désormais repliée à chaque arrivée sur
+# l'onglet Budget (ticket #78, revient sur le choix « ouverte par défaut »
+# fait pour #63), tout comme le groupe niveau 2 « Loyer » qu'elle contient
+# (replié par défaut depuis la première maquette du ticket #63) : il faut
+# déplier les deux, dans cet ordre, pour voir la ligne niveau 3 « Loyer
 # appartement » en dessous.
+- tapOn: 'Déplier la carte Fixe'
 - tapOn: 'Déplier le type de dépense Loyer'
 - assertVisible: 'Loyer appartement'
 - assertVisible: 'Salaire'
 - assertVisible: '.*800,00.*'
+
+# --- Ticket #78 : même comportement pour la carte « Fixe » de l'onglet
+# Budget — refermée à chaque retour sur l'onglet, y compris en restant sur
+# le détail de ce même mois (l'aller-retour d'onglet ne réinitialise pas
+# `moisSelectionne`). ---
+- tapOn: 'Onglet Infos'
+- tapOn: 'Onglet Budget'
+- assertVisible: 'Déplier la carte Fixe'
+- assertNotVisible: 'Loyer appartement'
 
 # --- Onglet Infos : suppression bloquée (ticket #67) — « Compte Test »
 # porte encore le type de dépense « Loyer » et le revenu « Salaire » ajoutés
