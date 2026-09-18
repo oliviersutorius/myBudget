@@ -56,6 +56,13 @@ appId: com.mybudget.app
 - tapOn: 'Ajouter une ligne — Loyer'
 - tapOn: 'Nom de la nouvelle ligne'
 - inputText: 'Loyer appartement'
+# `hideKeyboard` avant de taper sur « Montant » : sur un écran plus petit
+# (profil Nexus 5X, voir commentaire du workflow CI), le clavier resté
+# ouvert après la saisie de « Nom » recouvre le champ « Montant », plus
+# bas dans la popup — invisible/introuvable pour Maestro sans le fermer
+# d'abord (constaté en CI, `Element not found: ... Montant de la nouvelle
+# ligne`, avec le champ « Nom » déjà rempli visible sur la capture).
+- hideKeyboard
 - tapOn: 'Montant de la nouvelle ligne'
 - inputText: '1200'
 - hideKeyboard
@@ -101,6 +108,10 @@ appId: com.mybudget.app
 - tapOn: 'Ajouter un revenu'
 - tapOn: 'Libellé du revenu'
 - inputText: 'Salaire'
+# `hideKeyboard` avant « Montant du revenu » : même précaution que pour
+# « Montant de la nouvelle ligne » ci-dessus (voir son commentaire) — champ
+# potentiellement recouvert par le clavier sur un écran plus petit.
+- hideKeyboard
 - tapOn: 'Montant du revenu'
 - inputText: '2000'
 - hideKeyboard

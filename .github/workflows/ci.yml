@@ -121,34 +121,55 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # reactivecircus/android-emulator-runner@v2 télécharge le SDK Android
+      # (dont le paquet `emulator`, ~300 Mo) dans son étape interne « pre »
+      # avant même de démarrer l'AVD. Ce téléchargement échoue de façon
+      # intermittente côté serveurs Google (« Error on ZipFile unknown
+      # archive »), sans lien avec notre code — aucune logique de retry
+      # n'est prévue dans l'action elle-même. Wandalen/wretry.action ré-
+      # essaie les étapes pre/main/post de l'action encapsulée (ici surtout
+      # la « pre », là où l'échec est constaté) en cas de flake réseau.
+      #
+      # `profile: Nexus 5X` plutôt que `pixel_6` : sur le runner CI partagé
+      # (peu de CPU/RAM face à un émulateur + build Gradle simultanés), le
+      # profil pixel_6 (plus haute résolution/spec) a provoqué un ANR du
+      # Pixel Launcher lui-même (« Pixel Launcher isn't responding »),
+      # constaté en plein milieu du rendu de l'app (« Mes comptes » bien
+      # affiché derrière le dialogue système) — donc un problème de charge
+      # de l'émulateur, pas un bug de l'app. Nexus 5X est le profil plus
+      # léger classiquement recommandé pour ce type de flake en CI.
       - name: Démarrer l'émulateur Android et lancer les flows Maestro
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: Wandalen/wretry.action@v3.8.0
         with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          # Chaque ligne de `script:` tourne dans un `sh -c` séparé (voir le
-          # commentaire du step « Installer Maestro » ci-dessus) : la ligne
-          # `maestro test` et les captures qui doivent suivre même en cas
-          # d'échec sont donc regroupées sur une seule ligne (`;`, pas
-          # `&&`) — sur des lignes séparées, un `maestro test` en échec
-          # ferait sortir le script avant elles, on perdrait ces diagnostics
-          # justement au moment où ils sont les plus utiles (ticket #22 : 2
-          # runs en échec sur le seul smoke test onboarding.yaml, sans rien
-          # d'exploitable dans les logs du job pour en identifier la cause —
-          # `--debug-output` de Maestro testé en remplacement, sans effet
-          # constaté sur la version installée ici). `adb exec-out screencap`
-          # capture l'état de l'écran à l'arrêt du run (dernier flow en
-          # échec le cas échéant) ; `adb logcat -d`, les logs Android/app
-          # depuis le début du run (voir `adb logcat -c` ci-dessus) — les
-          # deux uploadés ci-dessous en cas d'échec (voir step suivant).
-          script: |
-            adb install -r android/app/build/outputs/apk/release/app-release.apk
-            adb logcat -c
-            maestro test e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb exec-out screencap -p > failure-screenshot.png; adb logcat -d > android-logcat.txt
+          action: reactivecircus/android-emulator-runner@v2
+          attempt_limit: 3
+          attempt_delay: 15000
+          with: |
+            api-level: 34
+            target: google_apis
+            arch: x86_64
+            profile: Nexus 5X
+            disable-animations: true
+            emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+            script: |
+              adb install -r android/app/build/outputs/apk/release/app-release.apk
+              adb logcat -c
+              maestro test e2e/; echo "MAESTRO_EXIT=$?" >> "$GITHUB_ENV"; adb exec-out screencap -p > failure-screenshot.png; adb logcat -d > android-logcat.txt
+      # Chaque ligne de `script:` ci-dessus tourne dans un `sh -c` séparé
+      # (le `script:` de reactivecircus/android-emulator-runner exécute
+      # chaque ligne dans un `sh -c` isolé) : la ligne `maestro test` et les
+      # captures qui doivent suivre même en cas d'échec sont donc regroupées
+      # sur une seule ligne (`;`, pas `&&`) — sur des lignes séparées, un
+      # `maestro test` en échec ferait sortir le script avant elles, on
+      # perdrait ces diagnostics justement au moment où ils sont les plus
+      # utiles (ticket #22 : 2 runs en échec sur le seul smoke test
+      # onboarding.yaml, sans rien d'exploitable dans les logs du job pour
+      # en identifier la cause — `--debug-output` de Maestro testé en
+      # remplacement, sans effet constaté sur la version installée ici).
+      # `adb exec-out screencap` capture l'état de l'écran à l'arrêt du run
+      # (dernier flow en échec le cas échéant) ; `adb logcat -d`, les logs
+      # Android/app depuis le début du run (voir `adb logcat -c` ci-dessus)
+      # — les deux uploadés ci-dessous en cas d'échec (voir step suivant).
       - name: Vérifier le résultat des flows Maestro
         run: exit "${MAESTRO_EXIT:-1}"
       - name: Uploader les diagnostics Maestro/Android en cas d'échec
