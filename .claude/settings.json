@@ -22,8 +22,7 @@
       "Bash(git branch *)",
       "Bash(gh pr *)",
       "Bash(gh issue *)",
-      "mcp__context7__resolve-library-id",
-      "mcp__context7__query-docs"
+      "mcp__context7__resolve-library-id"
     ],
     "deny": [
       "Read(**/*.env)",
