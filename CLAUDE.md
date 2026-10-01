@@ -87,6 +87,8 @@ Voir `docs/AGENTS.md` pour le détail complet (rôle, prompt, périmètre, chaî
 | Architecte / Lead Dev            | à la demande (agent par défaut) — rôle fusionné avec la revue finale (solo dev)             |
 | State management                 | `zustand-agent` (dès qu'un état est partagé entre écrans)                                   |
 
+**Documentation des librairies** : le MCP `context7` (déclaré dans `.mcp.json`) fournit la doc à jour d'Expo, Drizzle, Zustand, etc. — à consulter avant d'utiliser une API de librairie. Outil de développement uniquement : ne jamais y envoyer de code métier ni de secrets (détail : `docs/AGENTS.md`).
+
 ## Workflow Git & règles de contribution
 
 - **GitHub Flow** : `main` toujours déployable, une branche de feature isolée par tâche (`feat/...`, `fix/...`).
