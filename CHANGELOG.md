@@ -18,12 +18,13 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Page compte réorganisée en 4 onglets : Infos, Dépenses, Revenus, Budget.
 - Onglet Revenus : ajout d'un revenu sur un mois donné, navigation mois par mois, modification et suppression d'un revenu (#12).
 - Types de dépenses niveau 3 : saisie et historisation du montant par mois, avec action « Marquer absente » pour un mois sans dépense (#9).
-- Suppression d'un compte depuis la page d'accueil (menu « ⋮ » Modifier/Supprimer, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16).
+- Suppression d'un compte (onglet Infos, popup de confirmation), bloquée si des types de dépense ou des revenus dépendent encore de ce compte — même règle que pour les types de dépenses (#16, déplacée de la page d'accueil vers l'onglet Infos par #67, voir « Changed »).
 - Onglet Budget : calcul et affichage du montant disponible du mois (revenus - dépenses fixe et variable), sur la ligne récapitulative de chaque mois et sur le détail d'un mois — jamais agrégé entre comptes (#13).
 - Onglet Budget : bandeau d'incitation à définir des types de dépense, affiché au-dessus de la liste des mois tant qu'aucun n'existe pour le compte — évite la confusion entre « compte pas encore configuré » et « budget réellement nul » (#20).
 - Demande de la permission de notifications à la création du premier compte, une seule fois (pas de redemande à chaque lancement une fois la décision de l'utilisateur prise) — prépare le rappel du 1er du mois (#14), sans qu'aucune fonctionnalité actuelle n'en dépende (#19).
 - Rappel local (100% hors connexion) le 1er de chaque mois à 9h, invitant à saisir ses revenus du mois — tap sur la notification → ouverture de l'accueil (liste des comptes), sans favoriser un compte plutôt qu'un autre (#14).
 - Scénario e2e Maestro du parcours principal (`e2e/parcours-principal.yaml`) : création d'un compte → type de dépense niveau 2 (Fixe) + ligne niveau 3 avec un montant → ajout d'un revenu sur le mois courant → vérification du montant disponible affiché dans l'onglet Budget (#22).
+- Onglet Budget : masque les mois entièrement futurs de la liste et ajoute un récapitulatif détaillé du mois sélectionné (cartes niveau 1/niveau 2 collapsables, montant disponible en hero) (#63).
 
 ### Fixed
 
@@ -45,6 +46,8 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Sur une ligne de type de dépense niveau 3, « Modifier » reste accessible pendant qu'un montant est en cours d'enregistrement ; « Marquer absente »/« Supprimer » ne peuvent plus se déclencher pendant qu'un enregistrement est déjà en cours sur la même ligne.
 - CI : le job Tests e2e (Maestro) démarre désormais un émulateur Android (build natif via `expo prebuild` + Gradle) avant d'exécuter les flows, au lieu d'échouer systématiquement faute de device connecté (#43).
 - App entière plantant au démarrage sous Expo Go (`expo-notifications: ... was removed from Expo Go with the release of SDK 53`) depuis l'ajout de la dépendance par #19 : l'import du module est désormais différé et ne s'exécute jamais dans Expo Go (`src/utils/notifications-module.ts`) — les fonctionnalités de notifications y deviennent des no-op silencieux plutôt que de faire planter tous les écrans, `expo-notifications` restant pleinement fonctionnel hors Expo Go (dev client, build de production).
+- Dépenses : zone de clic verticale du chevron/libellé d'un type niveau 2 élargie (le tap replier/déplier ne fonctionnait que sur une fine bande autour du texte) ; fond des pavés niveau 1 harmonisé avec celui de l'onglet Budget (#64).
+- Revenus et pavé Variable de l'onglet Dépenses : zone de clic des chevrons `‹`/`›` du sélecteur de mois élargie à 44×44, cohérente avec le reste de l'app (#65).
 
 ### Changed
 
@@ -53,3 +56,4 @@ Généré/maintenu via la commande `/changelog` à partir des Conventional Commi
 - Actions « Modifier »/« Supprimer » des types de dépenses (niveaux 2 et 3) harmonisées sur le même menu « ⋮ » que l'onglet Revenus, à la place des liens texte précédents (#26).
 - Menu d'actions « ⋮ » extrait de la page compte vers un composant partagé (`src/components/actions-menu-button.tsx`), désormais réutilisé par la liste des comptes ; couvert par un test unitaire (#16).
 - Popup de confirmation de suppression : remplace le `Alert.alert` natif par une popup maison cohérente avec le reste de l'app (`ConfirmationSuppressionPopup`), le menu « ⋮ » lui-même restant natif pour l'instant (#45).
+- Page d'accueil : le menu « ⋮ » Modifier/Supprimer des lignes de compte disparaît — un tap n'importe où sur la ligne ouvre directement la page du compte (onglet Budget) ; la suppression migre dans l'onglet Infos (bouton « Supprimer le compte », popup dédiée dont le bouton « Supprimer » reste visible mais atténué, avec un message explicite, quand la suppression est bloquée) (#67).
