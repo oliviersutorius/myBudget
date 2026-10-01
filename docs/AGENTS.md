@@ -1,6 +1,8 @@
 # Agents — myBudget
 
-Projet solo dev, mobile-only (React Native/Expo), sans backend. Le catalogue ci-dessous s'appuie autant que possible sur les agents/skills globaux déjà disponibles dans l'environnement plutôt que de dupliquer des définitions.
+Projet solo dev, mobile-only (React Native/Expo), sans backend.
+
+**Définitions projet** : `react-native-agent`, `react-native-test-agent`, `cicd-agent`, `zustand-agent` et `documentaliste` sont définis dans `.claude/agents/`, avec la stack et les règles de myBudget. Les agents globaux de même nom (`~/.claude/agents/`) visent un autre projet (React Native bare + backend Laravel) : la version projet les remplace. Les skills restent globaux.
 
 ## Chaîne d'escalade standard
 
@@ -23,10 +25,10 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 ## Développeur
 
-- **Agent** : `react-native-agent`
+- **Agent projet** : `.claude/agents/react-native-agent.md`
 - **Rôle** : implémentation des features, écrans, composants, logique métier (budget, comptes, transactions, catégories).
 - **Skills associés** : `building-native-ui`, `native-data-fetching`, `test-driven-development`.
-- **Activation** : `/new-feature`, `/new-component`, ou toute tâche d'implémentation sur `mobile-app/` (ou équivalent une fois le projet scaffoldé).
+- **Activation** : `/new-feature`, `/new-component`, ou toute tâche d'implémentation dans `src/`.
 - **Périmètre** : code applicatif RN/Expo, hooks, écrans, navigation, intégration Zustand/Drizzle. Ne merge jamais lui-même.
 
 **Contexte domaine** :
@@ -52,7 +54,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 ## Testeur
 
-- **Agent** : `react-native-test-agent`
+- **Agent projet** : `.claude/agents/react-native-test-agent.md`
 - **Rôle** : écriture et maintenance des tests unitaires/intégration (Jest + React Native Testing Library) et e2e (Maestro), maintien du seuil de couverture à 90%.
 - **Skills associés** : `javascript-testing-patterns`, `test-driven-development`.
 - **Activation** : en amont de chaque implémentation (TDD) et à chaque `/new-feature` / `/new-component`.
@@ -79,7 +81,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 ## DevOps
 
-- **Agent** : `cicd-agent`
+- **Agent projet** : `.claude/agents/cicd-agent.md`
 - **Rôle** : maintien des pipelines GitHub Actions (`ci.yml`, `deploy-staging.yml`, `deploy-production.yml`), configuration EAS Build/Submit, gestion des environnements protégés GitHub.
 - **Activation** : évolution de la CI/CD, ajout de nouveaux checks, changement de stratégie de déploiement.
 
