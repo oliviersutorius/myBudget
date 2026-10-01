@@ -33,7 +33,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 **Contexte domaine** :
 
-- **Entités manipulées** : Compte (un utilisateur peut en avoir plusieurs), Revenu, Dépense (catégorisation niveau 1 / niveau 2), Budget mensuel (mois calendaire, par compte), Montant disponible (par compte).
+- **Entités manipulées** : Compte (un utilisateur peut en avoir plusieurs), Revenu, Dépense (type à 3 niveaux : fixe/variable → catégorie → ligne portant le montant), Budget mensuel (mois calendaire, par compte), Montant disponible (par compte).
 - **Règles métier à respecter** : application 100% locale (aucun appel réseau/tiers) ; un seul persona utilisateur mais multi-comptes bancaires possibles ; **les comptes ne sont jamais agrégés** (calculs et UI distincts par compte) ; le budget mensuel suit toujours le mois calendaire.
 - **Vocabulaire à utiliser** : "montant disponible" (jamais "argent de poche", terme familier réservé aux échanges produit) — voir `docs/GLOSSARY.md`.
 - **Intégrations externes** : aucune — vigilance si une tâche semble impliquer un service tiers, service à re-questionner avant implémentation.
@@ -48,7 +48,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 **Contexte domaine** :
 
-- **Entités à connaître** : Compte (multi-comptes possibles), Revenu, Dépense (niveau 1 / niveau 2), Budget mensuel, Montant disponible.
+- **Entités à connaître** : Compte (multi-comptes possibles), Revenu, Dépense (type à 3 niveaux : fixe/variable → catégorie → ligne portant le montant), Budget mensuel, Montant disponible.
 - **Règles métier à vérifier** : aucune intégration externe introduite (100% local) ; vocabulaire correct dans le code/UI ("montant disponible", pas "argent de poche") ; cohérence avec le cycle mensuel calendaire ; **aucune agrégation entre comptes** (un bug fréquent à surveiller : sommer des montants de plusieurs comptes).
 - **Vigilance particulière** : toute dépendance réseau, service tiers ou stockage non local doit être signalée comme écart vis-à-vis de la contrainte 100% local.
 
@@ -61,7 +61,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 **Contexte domaine** :
 
-- **Entités à couvrir dans les tests** : Compte (multi-comptes), Revenu, Dépense (niveau 1 / niveau 2), Budget mensuel, Montant disponible — en particulier le calcul du montant disponible par compte et son affichage instantané.
+- **Entités à couvrir dans les tests** : Compte (multi-comptes), Revenu, Dépense (type à 3 niveaux : fixe/variable → catégorie → ligne portant le montant), Budget mensuel, Montant disponible — en particulier le calcul du montant disponible par compte et son affichage instantané.
 - **Règles métier à tester** : comportement 100% offline (aucun appel réseau à mocker/attendre) ; cycle mensuel calendaire ; persona unique multi-comptes ; **non-agrégation entre comptes** (cas de test explicite : plusieurs comptes avec des montants qui ne doivent jamais se sommer).
 - **Vocabulaire** : utiliser "montant disponible" dans les noms de tests et assertions.
 
@@ -75,7 +75,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 **Contexte domaine** :
 
-- **Entités à documenter** : Compte (multi-comptes), Revenu, Dépense (niveau 1 / niveau 2), Budget mensuel, Montant disponible — maintenir `docs/DOMAIN.md`, `docs/GLOSSARY.md` et `docs/EPICS.md` à jour à mesure que le modèle de domaine se précise dans les tickets.
+- **Entités à documenter** : Compte (multi-comptes), Revenu, Dépense (type à 3 niveaux : fixe/variable → catégorie → ligne portant le montant), Budget mensuel, Montant disponible — maintenir `docs/DOMAIN.md`, `docs/GLOSSARY.md` et `docs/EPICS.md` à jour à mesure que le modèle de domaine se précise dans les tickets.
 - **Vocabulaire à respecter** : "montant disponible" (jamais "argent de poche" dans la doc technique/fonctionnelle finale).
 - **Contraintes à rappeler dans la doc** : 100% local, aucune intégration externe, persona unique.
 
@@ -105,7 +105,7 @@ Documentaliste et Testeur interviennent en continu (avant/pendant la PR), pas da
 
 **Contexte domaine** :
 
-- **Entités structurantes** : Compte (multi-comptes, agrégat racine du budget), Revenu, Dépense (niveau 1 / niveau 2), Budget mensuel (mois calendaire), Montant disponible — voir `docs/DOMAIN.md` pour le détail progressif.
+- **Entités structurantes** : Compte (multi-comptes, agrégat racine du budget), Revenu, Dépense (type à 3 niveaux : fixe/variable → catégorie → ligne portant le montant), Budget mensuel (mois calendaire), Montant disponible — voir `docs/DOMAIN.md` pour le détail progressif.
 - **Règles métier à arbitrer** : garder l'app 100% locale et sans intégration externe ; garder le produit simple (pas de sur-fonctionnalité) ; persona unique mais multi-comptes ; **jamais d'agrégation entre comptes**, ce qui structure fortement le modèle de données (isolation par compte) et la navigation UI.
 - **Vocabulaire** : "montant disponible" comme terme officiel.
 - **Intégrations externes** : aucune à ce jour — toute proposition d'intégration doit être validée explicitement, elle sort du cadre défini dans `docs/DOMAIN.md`.

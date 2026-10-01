@@ -33,7 +33,7 @@
 
 - **Compte (bancaire)** — un utilisateur peut avoir **plusieurs comptes**. Chaque compte porte son propre budget, géré de façon **totalement indépendante** (pas d'agrégation entre comptes, ni dans les calculs ni dans l'UI).
 - **Revenu** — entrée d'argent sur un compte donné, sur le mois.
-- **Dépense** — sortie d'argent sur un compte donné, catégorisée selon un type à deux dimensions (niveau 1 / niveau 2).
+- **Dépense** — sortie d'argent sur un compte donné, catégorisée selon un **type de dépense à 3 niveaux**, propre à chaque compte : niveau 1 `fixe`/`variable` (fixé à la création du niveau 2), niveau 2 = catégorie (ex. "Maison"), niveau 3 = ligne concrète qui porte le montant (ex. "Crédit immobilier"). Montant **fixe** : reconduit chaque mois et historisé par changement. Montant **variable** : saisi pour chaque mois, jamais reconduit.
 - **Budget mensuel** — cycle aligné sur le mois calendaire, **par compte**.
 - **Montant disponible** — ce qu'il reste sur un compte une fois les dépenses couvertes par rapport aux revenus **de ce compte**.
 
@@ -48,7 +48,7 @@
 
 - **Compte** — compte bancaire de l'utilisateur ; unité d'isolation des budgets (jamais agrégés entre eux).
 - **Montant disponible** — terme fonctionnel officiel à utiliser dans le code/UI (le terme familier "argent de poche" ne doit pas apparaître dans le code), calculé **par compte**.
-- **Dépense** — catégorisée niveau 1 / niveau 2 (hiérarchie à définir progressivement), rattachée à un compte.
+- **Dépense** — rattachée à un compte, catégorisée par un type de dépense à 3 niveaux (niveau 1 fixe/variable → niveau 2 catégorie → niveau 3 ligne portant le montant).
 - **Budget mensuel** — mois calendaire, par compte.
 
 **Hors scope actuel** : synchronisation bancaire automatique, export/import de données, agrégation/consolidation entre comptes, multilingue, traçabilité/historique des modifications.
